@@ -1,0 +1,109 @@
+name: sri_sankara_global_app
+description: Sri Sankara Global Academy Mobile Application
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  share_plus: ^7.2.1
+
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.2
+
+  # UI Components
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  carousel_slider: ^5.0.0
+  flutter_staggered_grid_view: ^0.7.0
+
+  # Network & API
+  http: ^1.2.1
+  dio: ^5.4.3
+
+  # Local Storage
+  shared_preferences: ^2.2.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Utilities
+  intl: any
+  url_launcher: ^6.2.6
+  image_picker: ^1.1.0
+
+  # Calendar & Events
+  table_calendar: ^3.1.1
+
+  # PDF Viewer
+  flutter_pdfview: ^1.3.2
+
+  # Firebase - Core only for Windows
+  firebase_core: ^2.32.0
+
+  # Firebase - Mobile/Web only
+
+  firebase_auth: ^4.20.0  # Use 4.20.0 instead of 6.x for better Windows compatibility
+  cloud_firestore: ^4.17.5
+  #firebase_messaging: ^14.9.4
+  firebase_analytics: ^10.10.7
+
+  # Charts
+  fl_chart: ^0.65.0
+
+  # Forms
+  flutter_form_builder: ^10.2.0
+  form_builder_validators: ^11.2.0
+
+  # Icons
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.9
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/images/logo.png
+    - assets/images/logo-wide.png
+    - assets/images/school_building.jpg
+    - assets/images/splash_logo.png
+    - assets/images/edexcel_logo.png
+    - assets/images/pearson_logo.png
+    - assets/images/kidzee_logo.png
+    - assets/images/correspondent.png
+    - assets/images/fac-1.png
+    - assets/images/fac-2.png
+    - assets/images/fac-3.png
+    - assets/images/fac-4.png
+    - assets/images/fac-5.png
+    - assets/images/fac-6.png
+    - assets/images/fac-7.png
+    - assets/images/fac-8.png
+    - assets/images/fac-9.png
+    - assets/images/fac-10.png
+    - assets/images/fac-11.png
+    - assets/images/fac-12.png
+    - assets/images/fac-13.png
+    - assets/images/fac-14.png
+    - assets/test_data.json

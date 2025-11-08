@@ -2,8 +2,6 @@
 cmake_minimum_required(VERSION 3.14)
 project(sri_sankara_global_app LANGUAGES CXX)
 
-# ADD THIS LINE to disable warnings as errors
-add_compile_options(/wd4996)
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "sri_sankara_global_app")

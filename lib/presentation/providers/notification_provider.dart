@@ -1,14 +1,10 @@
 // lib/presentation/providers/notification_provider.dart
 import 'package:flutter/material.dart';
 import '../../data/models/notification_model.dart';
-import '../../data/services/notification_service.dart';
-import '../../data/services/api_service.dart';
+import '../../data/services/local_notification_service.dart';
 
 class NotificationProvider extends ChangeNotifier {
-  final NotificationService _notificationService;
-
-  NotificationProvider()
-      : _notificationService = NotificationService(ApiService());
+  final LocalNotificationService _localNotificationService = LocalNotificationService();
 
   // State
   List<NotificationModel> _notifications = [];
@@ -24,19 +20,12 @@ class NotificationProvider extends ChangeNotifier {
 
   // Getters
   List<NotificationModel> get notifications => _notifications;
-
   List<NotificationModel> get unreadNotifications => _unreadNotifications;
-
   NotificationSummary? get summary => _summary;
-
   int get unreadCount => _unreadCount;
-
   bool get isLoading => _isLoading;
-
   String? get error => _error;
-
   String? get selectedType => _selectedType;
-
   bool get showOnlyUnread => _showOnlyUnread;
 
   // Filtered notifications based on current filters
@@ -54,23 +43,25 @@ class NotificationProvider extends ChangeNotifier {
     return filtered;
   }
 
-  // FETCH METHODS
+  // ===== FETCH METHODS =====
 
-  // Fetch all notifications
+  /// Fetch all notifications for a user
   Future<void> fetchNotifications(String userId, {int limit = 50}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _notificationService.fetchNotifications(
+      print('📥 Fetching notifications for user: $userId');
+      _notifications = await _localNotificationService.getUserNotifications(
         userId,
         limit: limit,
       );
-
-      _notifications = result;
+      _unreadCount = await _localNotificationService.getUnreadCount(userId);
       _error = null;
+      print('✅ Fetched ${_notifications.length} notifications, $_unreadCount unread');
     } catch (e) {
+      print('❌ Error fetching notifications: $e');
       _error = e.toString();
       _notifications = [];
     } finally {
@@ -79,15 +70,14 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch unread notifications
+  /// Fetch unread notifications only
   Future<void> fetchUnreadNotifications(String userId) async {
     try {
-      final result = await _notificationService.fetchNotifications(
+      _unreadNotifications = await _localNotificationService.getUserNotifications(
         userId,
         unreadOnly: true,
       );
-
-      _unreadNotifications = result;
+      _unreadCount = _unreadNotifications.length;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -95,19 +85,17 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch notifications by type
+  /// Fetch notifications by type
   Future<void> fetchNotificationsByType(String userId, String type) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _notificationService.fetchNotifications(
+      _notifications = await _localNotificationService.getUserNotifications(
         userId,
         type: type,
       );
-
-      _notifications = result;
       _error = null;
     } catch (e) {
       _error = e.toString();
@@ -118,11 +106,10 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch notification summary
+  /// Fetch notification summary
   Future<void> fetchNotificationSummary(String userId) async {
     try {
-      final result = await _notificationService.getNotificationSummary(userId);
-      _summary = result;
+      _summary = await _localNotificationService.getNotificationSummary(userId);
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -130,11 +117,10 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch unread count
+  /// Fetch unread count only (lightweight)
   Future<void> fetchUnreadCount(String userId) async {
     try {
-      final count = await _notificationService.getUnreadCount(userId);
-      _unreadCount = count;
+      _unreadCount = await _localNotificationService.getUnreadCount(userId);
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -142,9 +128,9 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // CREATE METHODS
+  // ===== CREATE METHODS =====
 
-  // Create single notification
+  /// Create single notification
   Future<bool> createNotification({
     required String userId,
     required String title,
@@ -160,7 +146,7 @@ class NotificationProvider extends ChangeNotifier {
     String? senderRole,
   }) async {
     try {
-      final success = await _notificationService.createNotification(
+      final success = await _localNotificationService.createNotification(
         userId: userId,
         title: title,
         message: message,
@@ -176,7 +162,8 @@ class NotificationProvider extends ChangeNotifier {
       );
 
       if (success) {
-        notifyListeners();
+        // Refresh notifications after creating
+        await fetchNotifications(userId);
       }
       return success;
     } catch (e) {
@@ -186,7 +173,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Create bulk notifications
+  /// Create bulk notifications
   Future<bool> createBulkNotifications({
     required List<String> userIds,
     required String title,
@@ -202,7 +189,7 @@ class NotificationProvider extends ChangeNotifier {
     String? senderRole,
   }) async {
     try {
-      final success = await _notificationService.createBulkNotifications(
+      final success = await _localNotificationService.createBulkNotifications(
         userIds: userIds,
         title: title,
         message: message,
@@ -228,12 +215,12 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // MARK AS READ METHODS
+  // ===== MARK AS READ METHODS =====
 
-  // Mark single notification as read
+  /// Mark single notification as read
   Future<bool> markAsRead(String notificationId) async {
     try {
-      final success = await _notificationService.markAsRead(notificationId);
+      final success = await _localNotificationService.markAsRead(notificationId);
 
       if (success) {
         // Update local list
@@ -258,13 +245,13 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Mark all notifications as read
+  /// Mark all notifications as read
   Future<bool> markAllAsRead(String userId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final success = await _notificationService.markAllAsRead(userId);
+      final success = await _localNotificationService.markAllAsRead(userId);
 
       if (success) {
         // Update all notifications to read
@@ -283,17 +270,20 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // DELETE METHODS
+  // ===== DELETE METHODS =====
 
-  // Delete single notification
+  /// Delete single notification
   Future<bool> deleteNotification(String notificationId) async {
     try {
-      final success = await _notificationService.deleteNotification(
-          notificationId);
+      final success = await _localNotificationService.deleteNotification(notificationId);
 
       if (success) {
         _notifications.removeWhere((n) => n.id == notificationId);
         _unreadNotifications.removeWhere((n) => n.id == notificationId);
+
+        // Recalculate unread count
+        _unreadCount = _notifications.where((n) => !n.isRead).length;
+
         notifyListeners();
       }
       return success;
@@ -304,18 +294,21 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Delete all notifications
+  /// Delete all notifications for a user
   Future<bool> deleteAllNotifications(String userId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Note: This would need to be implemented in the service
-      // For now, just clear local state
-      _notifications = [];
-      _unreadNotifications = [];
-      _unreadCount = 0;
-      return true;
+      final success = await _localNotificationService.clearAllNotifications(userId);
+
+      if (success) {
+        _notifications = [];
+        _unreadNotifications = [];
+        _unreadCount = 0;
+        notifyListeners();
+      }
+      return success;
     } catch (e) {
       _error = e.toString();
       return false;
@@ -325,9 +318,9 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // SPECIFIC NOTIFICATION TYPES
+  // ===== SPECIFIC NOTIFICATION TYPES =====
 
-  // Send attendance notification
+  /// Send attendance notification
   Future<bool> sendAttendanceNotification({
     required String studentId,
     required List<String> parentIds,
@@ -337,7 +330,7 @@ class NotificationProvider extends ChangeNotifier {
     required String markedBy,
   }) async {
     try {
-      final success = await _notificationService.sendAttendanceNotification(
+      final success = await _localNotificationService.sendAttendanceNotification(
         studentId: studentId,
         parentIds: parentIds,
         studentName: studentName,
@@ -353,7 +346,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Send announcement notification
+  /// Send announcement notification
   Future<bool> sendAnnouncementNotification({
     required List<String> userIds,
     required String title,
@@ -365,7 +358,7 @@ class NotificationProvider extends ChangeNotifier {
     String priority = 'medium',
   }) async {
     try {
-      final success = await _notificationService.sendAnnouncementNotification(
+      final success = await _localNotificationService.sendAnnouncementNotification(
         userIds: userIds,
         title: title,
         message: message,
@@ -383,7 +376,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // Send grade notification
+  /// Send grade notification
   Future<bool> sendGradeNotification({
     required String studentId,
     required List<String> parentIds,
@@ -393,7 +386,7 @@ class NotificationProvider extends ChangeNotifier {
     required String teacherId,
   }) async {
     try {
-      final success = await _notificationService.sendGradeNotification(
+      final success = await _localNotificationService.sendGradeNotification(
         studentId: studentId,
         parentIds: parentIds,
         studentName: studentName,
@@ -409,42 +402,40 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // FILTER METHODS
+  // ===== FILTER METHODS =====
 
-  // Set filter type
+  /// Set filter type
   void setFilterType(String? type) {
     _selectedType = type;
     notifyListeners();
   }
 
-  // Toggle show only unread
+  /// Toggle show only unread
   void toggleShowOnlyUnread() {
     _showOnlyUnread = !_showOnlyUnread;
     notifyListeners();
   }
 
-  // Clear filters
+  /// Clear filters
   void clearFilters() {
     _selectedType = null;
     _showOnlyUnread = false;
     notifyListeners();
   }
 
-  // UTILITY METHODS
+  // ===== UTILITY METHODS =====
 
-  // Check if there are unread notifications
+  /// Check if there are unread notifications
   bool hasUnreadNotifications() {
     return _unreadCount > 0;
   }
 
-  // Get notifications count by type
+  /// Get notifications count by type
   int getCountByType(String type) {
-    return _notifications
-        .where((n) => n.type == type)
-        .length;
+    return _notifications.where((n) => n.type == type).length;
   }
 
-  // Clear all data
+  /// Clear all data
   void clearData() {
     _notifications = [];
     _unreadNotifications = [];
@@ -456,7 +447,7 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Refresh all data
+  /// Refresh all data
   Future<void> refreshAll(String userId) async {
     await Future.wait([
       fetchNotifications(userId),
@@ -464,5 +455,16 @@ class NotificationProvider extends ChangeNotifier {
       fetchNotificationSummary(userId),
       fetchUnreadCount(userId),
     ]);
+  }
+
+  /// Initialize sample data (call once on first launch)
+  Future<bool> initializeSampleData() async {
+    try {
+      return await _localNotificationService.initializeSampleNotifications();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 }

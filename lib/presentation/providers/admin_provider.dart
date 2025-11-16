@@ -1,277 +1,379 @@
-// // lib/presentation/providers/admin_provider.dart
-//
-// import 'package:flutter/foundation.dart';
-// import '../../data/services/admin_service.dart';
-//
-// class AdminProvider with ChangeNotifier {
-//   final AdminService _adminService;
-//
-//   AdminProvider(this._adminService);
-//
-//   bool _isLoading = false;
-//   List<Map<String, dynamic>> _students = [];
-//   List<Map<String, dynamic>> _teachers = [];
-//   Map<String, dynamic>? _statistics;
-//
-//   bool get isLoading => _isLoading;
-//   List<Map<String, dynamic>> get students => _students;
-//   List<Map<String, dynamic>> get teachers => _teachers;
-//   Map<String, dynamic>? get statistics => _statistics;
-//
-//   // Load all users (students and teachers)
-//   Future<void> loadAllUsers() async {
-//     _isLoading = true;
-//     notifyListeners();
-//
-//     try {
-//       _students = await _adminService.getAllStudents();
-//       _teachers = await _adminService.getAllTeachers();
-//     } catch (e) {
-//       debugPrint('Error loading users: $e');
-//     }
-//
-//     _isLoading = false;
-//     notifyListeners();
-//   }
-//
-//   // Load dashboard statistics
-//   Future<void> loadStatistics() async {
-//     try {
-//       _statistics = await _adminService.getDashboardStatistics();
-//       notifyListeners();
-//     } catch (e) {
-//       debugPrint('Error loading statistics: $e');
-//     }
-//   }
-//
-//   // Add new student
-//   Future<bool> addStudent(Map<String, dynamic> studentData) async {
-//     try {
-//       final success = await _adminService.addStudent(studentData);
-//       if (success) {
-//         await loadAllUsers(); // Reload the list
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error adding student: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Update student
-//   Future<bool> updateStudent(String studentId, Map<String, dynamic> studentData) async {
-//     try {
-//       final success = await _adminService.updateStudent(studentId, studentData);
-//       if (success) {
-//         await loadAllUsers(); // Reload the list
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error updating student: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Delete student
-//   Future<bool> deleteStudent(String studentId) async {
-//     try {
-//       final success = await _adminService.deleteStudent(studentId);
-//       if (success) {
-//         _students.removeWhere((s) => s['student_id'] == studentId);
-//         notifyListeners();
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error deleting student: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Add new teacher
-//   Future<bool> addTeacher(Map<String, dynamic> teacherData) async {
-//     try {
-//       final success = await _adminService.addTeacher(teacherData);
-//       if (success) {
-//         await loadAllUsers(); // Reload the list
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error adding teacher: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Update teacher
-//   Future<bool> updateTeacher(String teacherId, Map<String, dynamic> teacherData) async {
-//     try {
-//       final success = await _adminService.updateTeacher(teacherId, teacherData);
-//       if (success) {
-//         await loadAllUsers(); // Reload the list
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error updating teacher: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Delete teacher
-//   Future<bool> deleteTeacher(String teacherId) async {
-//     try {
-//       final success = await _adminService.deleteTeacher(teacherId);
-//       if (success) {
-//         _teachers.removeWhere((t) => t['teacher_id'] == teacherId);
-//         notifyListeners();
-//       }
-//       return success;
-//     } catch (e) {
-//       debugPrint('Error deleting teacher: $e');
-//       return false;
-//     }
-//   }
-//
-//   // Search students
-//   List<Map<String, dynamic>> searchStudents(String query) {
-//     if (query.isEmpty) return _students;
-//
-//     final lowerQuery = query.toLowerCase();
-//     return _students.where((student) {
-//       return student['name'].toString().toLowerCase().contains(lowerQuery) ||
-//           student['email'].toString().toLowerCase().contains(lowerQuery) ||
-//           student['student_id'].toString().toLowerCase().contains(lowerQuery);
-//     }).toList();
-//   }
-//
-//   // Search teachers
-//   List<Map<String, dynamic>> searchTeachers(String query) {
-//     if (query.isEmpty) return _teachers;
-//
-//     final lowerQuery = query.toLowerCase();
-//     return _teachers.where((teacher) {
-//       return teacher['name'].toString().toLowerCase().contains(lowerQuery) ||
-//           teacher['email'].toString().toLowerCase().contains(lowerQuery) ||
-//           teacher['subject'].toString().toLowerCase().contains(lowerQuery);
-//     }).toList();
-//   }
-//
-//   // Get students by class
-//   List<Map<String, dynamic>> getStudentsByClass(String className, String section) {
-//     return _students.where((s) =>
-//     s['class'] == className && s['section'] == section
-//     ).toList();
-//   }
-// }
-
 // lib/presentation/providers/admin_provider.dart
 
-import 'package:flutter/material.dart';
-import '../../data/services/test_data_service.dart';
+import 'package:flutter/foundation.dart';
+import '../../data/services/admin_service.dart';
+import '../../data/services/api_service.dart';
 
 class AdminProvider with ChangeNotifier {
-  bool _isLoading = false;
-  List<Map<String, dynamic>> _students = [];
-  List<Map<String, dynamic>> _teachers = [];
+  final AdminService _adminService = AdminService(ApiService());
 
-  bool get isLoading => _isLoading;
+  // Students
+  List<Map<String, dynamic>> _students = [];
+  // Teachers
+  List<Map<String, dynamic>> _teachers = [];
+  // Statistics
+  Map<String, dynamic> _statistics = {};
+
+  bool _isLoading = false;
+  String? _error;
+
+  // Getters
   List<Map<String, dynamic>> get students => _students;
   List<Map<String, dynamic>> get teachers => _teachers;
+  Map<String, dynamic> get statistics => _statistics;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
-  // Load all users
+  // ============================================================================
+  // LOAD ALL DATA
+  // ============================================================================
+
   Future<void> loadAllUsers() async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
-    await TestDataService.instance.loadTestData();
-    _students = TestDataService.instance.getStudents();
-    _teachers = TestDataService.instance.getTeachers();
+    try {
+      await Future.wait([
+        _loadStudents(),
+        _loadTeachers(),
+        _loadStatistics(),
+      ]);
 
-    _isLoading = false;
-    notifyListeners();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  // Add Student
+  // ============================================================================
+  // STUDENT MANAGEMENT
+  // ============================================================================
+
+  Future<void> _loadStudents() async {
+    try {
+      _students = await _adminService.getAllStudents();
+    } catch (e) {
+      debugPrint('Error loading students: $e');
+      throw e;
+    }
+  }
+
   Future<bool> addStudent(Map<String, dynamic> studentData) async {
     try {
-      final studentId = 'S${DateTime.now().millisecondsSinceEpoch}';
-      studentData['student_id'] = studentId;
-
-      _students.add(studentData);
+      _isLoading = true;
       notifyListeners();
-      return true;
+
+      final success = await _adminService.addStudent(studentData);
+      if (success) {
+        await _loadStudents();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error adding student: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
   }
 
-  // Update Student
   Future<bool> updateStudent(String studentId, Map<String, dynamic> studentData) async {
     try {
-      final index = _students.indexWhere((s) => s['student_id'] == studentId);
-      if (index != -1) {
-        _students[index] = {..._students[index], ...studentData};
-        notifyListeners();
-        return true;
+      _isLoading = true;
+      notifyListeners();
+
+      final success = await _adminService.updateStudent(studentId, studentData);
+      if (success) {
+        await _loadStudents();
       }
-      return false;
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error updating student: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
   }
 
-  // Delete Student
   Future<bool> deleteStudent(String studentId) async {
     try {
-      _students.removeWhere((s) => s['student_id'] == studentId);
+      _isLoading = true;
       notifyListeners();
-      return true;
+
+      final success = await _adminService.deleteStudent(studentId);
+      if (success) {
+        await _loadStudents();
+        await _loadStatistics(); // Refresh statistics
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error deleting student: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
   }
 
-  // Add Teacher
+  // ============================================================================
+  // TEACHER MANAGEMENT
+  // ============================================================================
+
+  Future<void> _loadTeachers() async {
+    try {
+      _teachers = await _adminService.getAllTeachers();
+    } catch (e) {
+      debugPrint('Error loading teachers: $e');
+      throw e;
+    }
+  }
+
   Future<bool> addTeacher(Map<String, dynamic> teacherData) async {
     try {
-      final teacherId = 'T${DateTime.now().millisecondsSinceEpoch}';
-      teacherData['teacher_id'] = teacherId;
-
-      _teachers.add(teacherData);
+      _isLoading = true;
       notifyListeners();
-      return true;
+
+      final success = await _adminService.addTeacher(teacherData);
+      if (success) {
+        await _loadTeachers();
+        await _loadStatistics(); // Refresh statistics
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error adding teacher: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
   }
 
-  // Update Teacher
   Future<bool> updateTeacher(String teacherId, Map<String, dynamic> teacherData) async {
     try {
-      final index = _teachers.indexWhere((t) => t['teacher_id'] == teacherId);
-      if (index != -1) {
-        _teachers[index] = {..._teachers[index], ...teacherData};
-        notifyListeners();
-        return true;
+      _isLoading = true;
+      notifyListeners();
+
+      final success = await _adminService.updateTeacher(teacherId, teacherData);
+      if (success) {
+        await _loadTeachers();
       }
-      return false;
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error updating teacher: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
   }
 
-  // Delete Teacher
   Future<bool> deleteTeacher(String teacherId) async {
     try {
-      _teachers.removeWhere((t) => t['teacher_id'] == teacherId);
+      _isLoading = true;
       notifyListeners();
-      return true;
+
+      final success = await _adminService.deleteTeacher(teacherId);
+      if (success) {
+        await _loadTeachers();
+        await _loadStatistics(); // Refresh statistics
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } catch (e) {
-      debugPrint('Error deleting teacher: $e');
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
       return false;
     }
+  }
+
+  // ============================================================================
+  // STATISTICS
+  // ============================================================================
+
+  Future<void> _loadStatistics() async {
+    try {
+      _statistics = await _adminService.getDashboardStatistics();
+    } catch (e) {
+      debugPrint('Error loading statistics: $e');
+    }
+  }
+
+  // ============================================================================
+  // BULK OPERATIONS
+  // ============================================================================
+
+  Future<Map<String, dynamic>> importStudents(List<Map<String, dynamic>> studentsData) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _adminService.importStudents(studentsData);
+
+      if (result['success']) {
+        await _loadStudents();
+        await _loadStatistics();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': false,
+        'imported': 0,
+        'failed': studentsData.length,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> importTeachers(List<Map<String, dynamic>> teachersData) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _adminService.importTeachers(teachersData);
+
+      if (result['success']) {
+        await _loadTeachers();
+        await _loadStatistics();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': false,
+        'imported': 0,
+        'failed': teachersData.length,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // ============================================================================
+  // SEARCH & FILTER
+  // ============================================================================
+
+  List<Map<String, dynamic>> searchStudents(String query) {
+    if (query.isEmpty) return _students;
+
+    final lowerQuery = query.toLowerCase();
+    return _students.where((student) {
+      return student['name'].toString().toLowerCase().contains(lowerQuery) ||
+          student['student_id'].toString().toLowerCase().contains(lowerQuery) ||
+          student['email'].toString().toLowerCase().contains(lowerQuery);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> searchTeachers(String query) {
+    if (query.isEmpty) return _teachers;
+
+    final lowerQuery = query.toLowerCase();
+    return _teachers.where((teacher) {
+      return teacher['name'].toString().toLowerCase().contains(lowerQuery) ||
+          teacher['teacher_id'].toString().toLowerCase().contains(lowerQuery) ||
+          teacher['subject'].toString().toLowerCase().contains(lowerQuery);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> filterStudentsByClass(String className) {
+    if (className == 'All') return _students;
+    return _students.where((s) => s['class'] == className).toList();
+  }
+
+  List<Map<String, dynamic>> filterTeachersBySubject(String subject) {
+    if (subject == 'All') return _teachers;
+    return _teachers.where((t) => t['subject'] == subject).toList();
+  }
+
+  // ============================================================================
+  // REPORTS
+  // ============================================================================
+
+  Future<Map<String, dynamic>> generateReport({
+    required String reportType,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      return await _adminService.generateSchoolReport(
+        reportType: reportType,
+        startDate: startDate,
+        endDate: endDate,
+      );
+    } catch (e) {
+      debugPrint('Error generating report: $e');
+      return {};
+    }
+  }
+
+  // ============================================================================
+  // ANALYTICS
+  // ============================================================================
+
+  Map<String, int> getStudentsByClass() {
+    final Map<String, int> classCount = {};
+    for (var student in _students) {
+      final className = student['class'] as String;
+      classCount[className] = (classCount[className] ?? 0) + 1;
+    }
+    return classCount;
+  }
+
+  Map<String, int> getTeachersBySubject() {
+    final Map<String, int> subjectCount = {};
+    for (var teacher in _teachers) {
+      final subject = teacher['subject'] as String;
+      subjectCount[subject] = (subjectCount[subject] ?? 0) + 1;
+    }
+    return subjectCount;
+  }
+
+  Map<String, int> getStudentsByGender() {
+    final Map<String, int> genderCount = {};
+    for (var student in _students) {
+      final gender = student['gender'] as String;
+      genderCount[gender] = (genderCount[gender] ?? 0) + 1;
+    }
+    return genderCount;
+  }
+
+  // ============================================================================
+  // UTILITIES
+  // ============================================================================
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  Future<void> refresh() async {
+    await loadAllUsers();
   }
 }

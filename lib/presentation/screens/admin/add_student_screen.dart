@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/admin_provider.dart';
+import '../../providers/student_provider.dart';
+import '../../../data/models/student_model.dart';
 
 class AddStudentScreen extends StatefulWidget {
   final Map<String, dynamic>? studentData; // For editing existing student
@@ -51,6 +52,10 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     if (widget.studentData != null) {
       _loadStudentData();
     }
+    // Set default blood group
+    if (_bloodGroupController.text.isEmpty) {
+      _bloodGroupController.text = 'A+';
+    }
   }
 
   void _loadStudentData() {
@@ -58,7 +63,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _nameController.text = data['name'] ?? '';
     _emailController.text = data['email'] ?? '';
     _dobController.text = data['date_of_birth'] ?? '';
-    _bloodGroupController.text = data['blood_group'] ?? '';
+    _bloodGroupController.text = data['blood_group'] ?? 'A+';
     _rollNumberController.text = data['roll_number']?.toString() ?? '';
     _selectedClass = data['class'] ?? 'Pre-KG';
     _selectedSection = data['section'] ?? 'A';
@@ -73,7 +78,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _motherPhoneController.text = parentDetails['mother_phone'] ?? '';
     _motherEmailController.text = parentDetails['mother_email'] ?? '';
     _motherOccupationController.text = parentDetails['mother_occupation'] ?? '';
-    _addressController.text = parentDetails['address'] ?? '';
+    _addressController.text = data['address'] ?? '';
   }
 
   @override
@@ -109,44 +114,69 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     }
   }
 
+  String _generateStudentId() {
+    final now = DateTime.now();
+    return 'STU${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.millisecond.toString().padLeft(3, '0')}';
+  }
+
   Future<void> _saveStudent() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final studentData = {
-      'name': _nameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'class': _selectedClass,
-      'section': _selectedSection,
-      'roll_number': int.tryParse(_rollNumberController.text.trim()) ?? 1,
-      'date_of_birth': _dobController.text.trim(),
-      'blood_group': _bloodGroupController.text.trim(),
-      'gender': _selectedGender,
-      'parent_details': {
-        'father_name': _fatherNameController.text.trim(),
-        'father_phone': _fatherPhoneController.text.trim(),
-        'father_email': _fatherEmailController.text.trim(),
-        'father_occupation': _fatherOccupationController.text.trim(),
-        'mother_name': _motherNameController.text.trim(),
-        'mother_phone': _motherPhoneController.text.trim(),
-        'mother_email': _motherEmailController.text.trim(),
-        'mother_occupation': _motherOccupationController.text.trim(),
-        'address': _addressController.text.trim(),
-      }
-    };
-
     try {
-      final adminProvider = context.read<AdminProvider>();
+      final studentProvider = context.read<StudentProvider>();
+
+      // Create parent details
+      final parentDetails = ParentDetails(
+        fatherName: _fatherNameController.text.trim(),
+        fatherPhone: _fatherPhoneController.text.trim(),
+        fatherEmail: _fatherEmailController.text.trim(),
+        fatherOccupation: _fatherOccupationController.text.trim(),
+        motherName: _motherNameController.text.trim(),
+        motherPhone: _motherPhoneController.text.trim(),
+        motherEmail: _motherEmailController.text.trim(),
+        motherOccupation: _motherOccupationController.text.trim(),
+      );
+
       bool success;
 
       if (widget.studentData != null) {
-        success = await adminProvider.updateStudent(
-          widget.studentData!['student_id'],
-          studentData,
+        // UPDATE existing student
+        final updatedStudent = StudentModel(
+          studentId: widget.studentData!['student_id'],
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          className: _selectedClass,
+          section: _selectedSection,
+          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
+          dateOfBirth: _dobController.text.trim(),
+          bloodGroup: _bloodGroupController.text.trim(),
+          gender: _selectedGender,
+          address: _addressController.text.trim(),
+          admissionDate: widget.studentData!['admission_date'] ?? DateTime.now().toIso8601String().split('T')[0],
+          parentDetails: parentDetails,
         );
+
+        success = await studentProvider.updateStudent(updatedStudent);
       } else {
-        success = await adminProvider.addStudent(studentData);
+        // ADD new student
+        final newStudent = StudentModel(
+          studentId: _generateStudentId(),
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          className: _selectedClass,
+          section: _selectedSection,
+          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
+          dateOfBirth: _dobController.text.trim(),
+          bloodGroup: _bloodGroupController.text.trim(),
+          gender: _selectedGender,
+          address: _addressController.text.trim(),
+          admissionDate: DateTime.now().toIso8601String().split('T')[0],
+          parentDetails: parentDetails,
+        );
+
+        success = await studentProvider.addStudent(newStudent);
       }
 
       setState(() => _isLoading = false);
@@ -154,18 +184,40 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.studentData != null
-                ? 'Student updated successfully'
-                : 'Student added successfully'),
-            backgroundColor: Colors.green,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(widget.studentData != null
+                    ? 'Student updated successfully'
+                    : 'Student added successfully'),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
-        Navigator.pop(context, true);
+        Navigator.pop(context, true); // Return true to indicate success
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to save student'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Text('Failed to ${widget.studentData != null ? 'update' : 'add'} student'),
+              ],
+            ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -174,8 +226,19 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -184,10 +247,15 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.studentData != null;
+
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text(widget.studentData != null ? 'Edit Student' : 'Add New Student'),
+        title: Text(isEditing ? 'Edit Student' : 'Add New Student'),
         elevation: 0,
+        backgroundColor: const Color(0xFF6366F1),
+        foregroundColor: Colors.white,
       ),
       body: Form(
         key: _formKey,
@@ -195,7 +263,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Student Information Section
-            _buildSectionHeader('Student Information'),
+            _buildSectionHeader('Student Information', Icons.person_outline),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _nameController,
@@ -288,7 +356,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             const SizedBox(height: 32),
 
             // Parent Information Section
-            _buildSectionHeader('Father\'s Information'),
+            _buildSectionHeader('Father\'s Information', Icons.man),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _fatherNameController,
@@ -322,7 +390,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
             const SizedBox(height: 32),
 
-            _buildSectionHeader('Mother\'s Information'),
+            _buildSectionHeader('Mother\'s Information', Icons.woman),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _motherNameController,
@@ -354,7 +422,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
             const SizedBox(height: 32),
 
-            _buildSectionHeader('Address'),
+            _buildSectionHeader('Address', Icons.home),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _addressController,
@@ -371,35 +439,59 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             ElevatedButton(
               onPressed: _isLoading ? null : _saveStudent,
               style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 2,
               ),
               child: _isLoading
                   ? const SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
               )
                   : Text(
-                widget.studentData != null ? 'Update Student' : 'Add Student',
-                style: const TextStyle(fontSize: 16),
+                isEditing ? 'Update Student' : 'Add Student',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-      ),
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: const Color(0xFF6366F1), size: 20),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+      ],
     );
   }
 
@@ -418,12 +510,21 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        prefixIcon: Icon(icon, color: const Color(0xFF6366F1)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
         ),
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: Colors.white,
       ),
     );
   }
@@ -440,9 +541,18 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         labelText: label,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
         ),
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: Colors.white,
       ),
       items: items.map((item) {
         return DropdownMenuItem(

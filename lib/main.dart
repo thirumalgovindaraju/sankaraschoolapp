@@ -57,6 +57,9 @@ class _MyAppState extends State<MyApp> {
           create: (context) => AuthProvider(AuthService(ApiService())),
         ),
 
+        ChangeNotifierProvider(
+          create: (_) => DashboardProvider()..initializeRealTimeUpdates(),
+        ),
         // Core Providers
         ChangeNotifierProvider(create: (context) => HomeProvider()),
         ChangeNotifierProvider(create: (context) => AcademicProvider()),
@@ -69,10 +72,10 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (context) => TeacherProvider()),
 
         // Dashboard Provider
-        ChangeNotifierProvider(
+        /*ChangeNotifierProvider(
           create: (context) => DashboardProvider(
             DashboardService(ApiService(), useTestMode: true),
-          ),
+          ),*/
         ),
       ],
       child: MaterialApp(

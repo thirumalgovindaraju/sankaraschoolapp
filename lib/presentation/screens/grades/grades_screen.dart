@@ -21,7 +21,10 @@ class _GradesScreenState extends State<GradesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadGrades();
+    // FIX: Use addPostFrameCallback to load data AFTER build completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadGrades();
+    });
   }
 
   Future<void> _loadGrades() async {

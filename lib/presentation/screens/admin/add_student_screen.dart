@@ -1,12 +1,15 @@
-// lib/presentation/screens/admin/add_student_screen.dart
+// lib/presentation/screens/admin/add_student_screen.dart (UPDATED)
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../../data/models/student_model.dart';
+import '../../../data/services/activity_service.dart';
+
 
 class AddStudentScreen extends StatefulWidget {
-  final Map<String, dynamic>? studentData; // For editing existing student
+  final Map<String, dynamic>? studentData;
 
   const AddStudentScreen({Key? key, this.studentData}) : super(key: key);
 
@@ -52,7 +55,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     if (widget.studentData != null) {
       _loadStudentData();
     }
-    // Set default blood group
     if (_bloodGroupController.text.isEmpty) {
       _bloodGroupController.text = 'A+';
     }
@@ -118,7 +120,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     final now = DateTime.now();
     return 'STU${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.millisecond.toString().padLeft(3, '0')}';
   }
-
+/*
   Future<void> _saveStudent() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -126,8 +128,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
     try {
       final studentProvider = context.read<StudentProvider>();
+      final activityService = ActivityService(); // 🔥 NEW
 
-      // Create parent details
       final parentDetails = ParentDetails(
         fatherName: _fatherNameController.text.trim(),
         fatherPhone: _fatherPhoneController.text.trim(),
@@ -139,13 +141,27 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         motherOccupation: _motherOccupationController.text.trim(),
       );
 
-      bool success;
+      bool success = await studentProvider.addStudent(newStudent);
+      // 🔥 ADD THIS BLOCK
+      if (success && widget.studentData == null) {  // Only for new students
+        await activityService.logStudentAdmission(
+          _nameController.text.trim(),
+          '$_selectedClass-$_selectedSection',
+        );
+
+        if (mounted) {
+          await context.read<DashboardProvider>().refreshDashboard();
+        }
+      }
+
+      final studentName = _nameController.text.trim();
+      final className = '$_selectedClass-$_selectedSection';
 
       if (widget.studentData != null) {
         // UPDATE existing student
         final updatedStudent = StudentModel(
           studentId: widget.studentData!['student_id'],
-          name: _nameController.text.trim(),
+          name: studentName,
           email: _emailController.text.trim(),
           className: _selectedClass,
           section: _selectedSection,
@@ -163,7 +179,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         // ADD new student
         final newStudent = StudentModel(
           studentId: _generateStudentId(),
-          name: _nameController.text.trim(),
+          name: studentName,
           email: _emailController.text.trim(),
           className: _selectedClass,
           section: _selectedSection,
@@ -177,6 +193,16 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         );
 
         success = await studentProvider.addStudent(newStudent);
+
+        // 🔥 NEW: Log activity for new student admission
+        if (success) {
+          await activityService.logStudentAdmission(studentName, className);
+        }
+      }
+
+      // 🔥 NEW: Refresh dashboard after success
+      if (success && mounted) {
+        await context.read<DashboardProvider>().refreshDashboard();
       }
 
       setState(() => _isLoading = false);
@@ -201,7 +227,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             margin: const EdgeInsets.all(16),
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -244,7 +270,144 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       }
     }
   }
+*/
+  Future<void> _saveStudent() async {
+    if (!_formKey.currentState!.validate()) return;
 
+    setState(() => _isLoading = true);
+
+    try {
+      final studentProvider = context.read<StudentProvider>();
+      final activityService = ActivityService();
+
+      final parentDetails = ParentDetails(
+        fatherName: _fatherNameController.text.trim(),
+        fatherPhone: _fatherPhoneController.text.trim(),
+        fatherEmail: _fatherEmailController.text.trim(),
+        fatherOccupation: _fatherOccupationController.text.trim(),
+        motherName: _motherNameController.text.trim(),
+        motherPhone: _motherPhoneController.text.trim(),
+        motherEmail: _motherEmailController.text.trim(),
+        motherOccupation: _motherOccupationController.text.trim(),
+      );
+
+      final studentName = _nameController.text.trim();
+      final className = '$_selectedClass-$_selectedSection';
+      bool success;
+
+      if (widget.studentData != null) {
+        // UPDATE existing student
+        final updatedStudent = StudentModel(
+          studentId: widget.studentData!['student_id'],
+          name: studentName,
+          email: _emailController.text.trim(),
+          className: _selectedClass,
+          section: _selectedSection,
+          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
+          dateOfBirth: _dobController.text.trim(),
+          bloodGroup: _bloodGroupController.text.trim(),
+          gender: _selectedGender,
+          address: _addressController.text.trim(),
+          admissionDate: widget.studentData!['admission_date'] ?? DateTime.now().toIso8601String().split('T')[0],
+          parentDetails: parentDetails,
+        );
+
+        success = await studentProvider.updateStudent(updatedStudent);
+      } else {
+        // ADD new student
+        final newStudent = StudentModel(
+          studentId: _generateStudentId(),
+          name: studentName,
+          email: _emailController.text.trim(),
+          className: _selectedClass,
+          section: _selectedSection,
+          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
+          dateOfBirth: _dobController.text.trim(),
+          bloodGroup: _bloodGroupController.text.trim(),
+          gender: _selectedGender,
+          address: _addressController.text.trim(),
+          admissionDate: DateTime.now().toIso8601String().split('T')[0],
+          parentDetails: parentDetails,
+        );
+
+        success = await studentProvider.addStudent(newStudent);
+
+        // Log activity for new student admission
+        if (success) {
+          await activityService.logStudentAdmission(studentName, className);
+        }
+      }
+
+      // Refresh dashboard after success
+      if (success && mounted) {
+        await context.read<DashboardProvider>().refreshDashboard();
+      }
+
+      setState(() => _isLoading = false);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(widget.studentData != null
+                    ? 'Student updated successfully'
+                    : 'Student added successfully'),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+        Navigator.pop(context, true);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Text('Failed to ${widget.studentData != null ? 'update' : 'add'} student'),
+              ],
+            ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.studentData != null;

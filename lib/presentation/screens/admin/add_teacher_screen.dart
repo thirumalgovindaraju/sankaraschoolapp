@@ -3,7 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/admin_provider.dart';
-
+import '../../providers/dashboard_provider.dart';  // ADD THIS
+import '../../../data/services/activity_service.dart';  // ADD THIS
 class AddTeacherScreen extends StatefulWidget {
   final Map<String, dynamic>? teacherData; // For editing existing teacher
 
@@ -156,7 +157,7 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
       },
     );
   }
-
+/*
   Future<void> _saveTeacher() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -187,7 +188,21 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
 
     try {
       final adminProvider = context.read<AdminProvider>();
-      bool success;
+      final activityService = ActivityService();
+      bool success = await adminProvider.addTeacher(teacherData);
+
+      // 🔥 ADD THIS BLOCK
+      if (success && widget.teacherData == null) {  // Only for new teachers
+        await activityService.logTeacherAssignment(
+          _nameController.text.trim(),
+          _selectedSubject,
+          _selectedClasses.join(', '),
+        );
+
+        if (mounted) {
+          await context.read<DashboardProvider>().refreshDashboard();
+        }
+      }
 
       if (widget.teacherData != null) {
         success = await adminProvider.updateTeacher(
@@ -230,7 +245,97 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
       }
     }
   }
+*/
+  Future<void> _saveTeacher() async {
+    if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedClasses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one class'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final teacherData = {
+      'name': _nameController.text.trim(),
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'subject': _selectedSubject,
+      'classes_assigned': _selectedClasses,
+      'qualification': _qualificationController.text.trim(),
+      'experience': int.tryParse(_experienceController.text.trim()) ?? 0,
+      'joining_date': _joiningDateController.text.trim(),
+      'gender': _selectedGender,
+      'address': _addressController.text.trim(),
+    };
+
+    try {
+      final adminProvider = context.read<AdminProvider>();
+      final activityService = ActivityService();
+      bool success;
+
+      if (widget.teacherData != null) {
+        // UPDATE existing teacher
+        success = await adminProvider.updateTeacher(
+          widget.teacherData!['teacher_id'],
+          teacherData,
+        );
+      } else {
+        // ADD new teacher
+        success = await adminProvider.addTeacher(teacherData);
+
+        // Log activity for new teacher
+        if (success) {
+          await activityService.logTeacherAssignment(
+            _nameController.text.trim(),
+            _selectedSubject,
+            _selectedClasses.join(', '),
+          );
+        }
+      }
+
+      // Refresh dashboard after success
+      if (success && mounted) {
+        await context.read<DashboardProvider>().refreshDashboard();
+      }
+
+      setState(() => _isLoading = false);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.teacherData != null
+                ? 'Teacher updated successfully'
+                : 'Teacher added successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save teacher'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(

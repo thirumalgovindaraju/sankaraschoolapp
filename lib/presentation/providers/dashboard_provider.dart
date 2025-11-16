@@ -1,13 +1,23 @@
-// lib/presentation/providers/dashboard_provider.dart
+// lib/presentation/providers/dashboard_provider.dart (UPDATED)
 
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../../data/models/dashboard_stats_model.dart';
+import '../../data/repositories/dashboard_repository.dart';
 import '../../data/services/dashboard_service.dart';
+import '../../data/services/activity_service.dart';
+import '../../data/services/api_service.dart';
 
 class DashboardProvider with ChangeNotifier {
-  final DashboardService _dashboardService;
+  final DashboardRepository _dashboardRepository;
+  StreamSubscription<List<RecentActivity>>? _activitiesSubscription;
 
-  DashboardProvider(this._dashboardService);
+  DashboardProvider({DashboardRepository? dashboardRepository})
+      : _dashboardRepository = dashboardRepository ??
+      DashboardRepository(
+        dashboardService: DashboardService(ApiService()),
+        activityService: ActivityService(),
+      );
 
   // State
   DashboardStats? _stats;
@@ -24,17 +34,31 @@ class DashboardProvider with ChangeNotifier {
   String? get error => _error;
   bool get hasData => _stats != null;
 
+  /// Initialize real-time listeners
+  void initializeRealTimeUpdates() {
+    // Listen to activities stream for real-time updates
+    _activitiesSubscription?.cancel();
+    _activitiesSubscription = _dashboardRepository
+        .getActivitiesStream(limit: 10)
+        .listen((activities) {
+      _recentActivities = activities;
+      notifyListeners();
+    }, onError: (error) {
+      print('❌ Activities stream error: $error');
+    });
+  }
+
   /// Fetch dashboard statistics
   Future<void> fetchDashboardStats() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      _stats = await _dashboardService.fetchDashboardStats();
+      _stats = await _dashboardRepository.fetchDashboardStats();
       _error = null;
     } catch (e) {
       _error = e.toString();
-      print('Error in fetchDashboardStats: $e');
+      print('❌ Error in fetchDashboardStats: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -47,9 +71,9 @@ class DashboardProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _recentActivities = await _dashboardService.fetchRecentActivities(limit: 10);
+      _recentActivities = await _dashboardRepository.fetchRecentActivities(limit: 10);
     } catch (e) {
-      print('Error in fetchRecentActivities: $e');
+      print('❌ Error in fetchRecentActivities: $e');
     } finally {
       _isActivitiesLoading = false;
       notifyListeners();
@@ -139,5 +163,11 @@ class DashboardProvider with ChangeNotifier {
     _recentActivities = [];
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _activitiesSubscription?.cancel();
+    super.dispose();
   }
 }

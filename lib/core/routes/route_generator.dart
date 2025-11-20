@@ -27,6 +27,12 @@ import '../../presentation/screens/news/news_management_screen.dart';
 import '../../data/models/student_model.dart';
 import 'package:provider/provider.dart';
 import '../../presentation/providers/auth_provider.dart';
+import '../../presentation/screens/announcements/announcements_list_screen.dart';
+import '../../presentation/screens/announcements/announcement_detail_screen.dart';
+import '../../presentation/screens/announcements/edit_announcement_screen.dart';
+import '../../data/models/announcement_model.dart';
+import '../../presentation/screens/academic/teacher_attendance_entry_screen.dart';
+
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -121,7 +127,10 @@ class RouteGenerator {
         return MaterialPageRoute(
           builder: (_) => const ManageUsersScreen(),
         );
-
+      case '/teacher-attendance-entry':
+        return MaterialPageRoute(
+          builder: (_) => const TeacherAttendanceEntryScreen(),
+        );
     // ============= ANNOUNCEMENT ROUTES =============
       case '/create-announcement':
         return MaterialPageRoute(
@@ -192,6 +201,29 @@ class RouteGenerator {
         }
         return MaterialPageRoute(builder: (_) => const GradesScreen());
 
+
+    // ============= Announcements =============
+      case '/create-announcement':
+        return MaterialPageRoute(
+          builder: (_) => const CreateAnnouncementScreen(),
+        );
+
+      case '/announcements':
+        return MaterialPageRoute(
+          builder: (_) => const AnnouncementsListScreen(),
+        );
+
+      case '/announcement-detail':
+        final announcement = settings.arguments as AnnouncementModel;
+        return MaterialPageRoute(
+          builder: (_) => AnnouncementDetailScreen(announcement: announcement),
+        );
+
+      case '/edit-announcement':
+        final announcement = settings.arguments as AnnouncementModel;
+        return MaterialPageRoute(
+          builder: (_) => EditAnnouncementScreen(announcement: announcement),
+        );
     // ============= OTHER ROUTES =============
       case '/profile':
         return MaterialPageRoute(builder: (_) => const ProfileScreen());

@@ -29,19 +29,36 @@ class StudentModel {
 
   factory StudentModel.fromJson(Map<String, dynamic> json) {
     return StudentModel(
-      studentId: json['student_id'] ?? '',
-      name: json['name'] ?? '',
-      className: json['class'] ?? '',
-      section: json['section'] ?? '',
-      rollNumber: json['roll_number'] ?? 0,
-      email: json['email'] ?? '',
-      dateOfBirth: json['date_of_birth'] ?? '',
-      gender: json['gender'] ?? '',
-      bloodGroup: json['blood_group'] ?? '',
-      address: json['address'] ?? '',
-      admissionDate: json['admission_date'] ?? '',
+      // Handle student_id - ensure it's always a String
+      studentId: _toString(json['student_id']) ?? '',
+      name: _toString(json['name']) ?? '',
+      className: _toString(json['class']) ?? '',
+      section: _toString(json['section']) ?? '',
+      // Handle roll_number - convert to int if it's stored as String
+      rollNumber: _toInt(json['roll_number']) ?? 0,
+      email: _toString(json['email']) ?? '',
+      dateOfBirth: _toString(json['date_of_birth']) ?? '',
+      gender: _toString(json['gender']) ?? '',
+      bloodGroup: _toString(json['blood_group']) ?? '',
+      address: _toString(json['address']) ?? '',
+      admissionDate: _toString(json['admission_date']) ?? '',
       parentDetails: ParentDetails.fromJson(json['parent_details'] ?? {}),
     );
+  }
+
+  // Helper method to safely convert any value to String
+  static String? _toString(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  // Helper method to safely convert any value to int
+  static int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    if (value is double) return value.toInt();
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -115,14 +132,14 @@ class ParentDetails {
 
   factory ParentDetails.fromJson(Map<String, dynamic> json) {
     return ParentDetails(
-      fatherName: json['father_name'] ?? '',
-      fatherPhone: json['father_phone'] ?? '',
-      fatherEmail: json['father_email'] ?? '',
-      fatherOccupation: json['father_occupation'] ?? '',
-      motherName: json['mother_name'] ?? '',
-      motherPhone: json['mother_phone'] ?? '',
-      motherEmail: json['mother_email'] ?? '',
-      motherOccupation: json['mother_occupation'] ?? '',
+      fatherName: json['father_name']?.toString() ?? '',
+      fatherPhone: json['father_phone']?.toString() ?? '',
+      fatherEmail: json['father_email']?.toString() ?? '',
+      fatherOccupation: json['father_occupation']?.toString() ?? '',
+      motherName: json['mother_name']?.toString() ?? '',
+      motherPhone: json['mother_phone']?.toString() ?? '',
+      motherEmail: json['mother_email']?.toString() ?? '',
+      motherOccupation: json['mother_occupation']?.toString() ?? '',
     );
   }
 

@@ -1,160 +1,221 @@
-// lib/data/services/data_initialization_service.dart
+// lib/data/services/data_initialization_service.dart (FIXED VERSION)
 
-import 'dart:convert';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/student_model.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'student_service.dart';
+import 'teacher_service.dart';
 
 class DataInitializationService {
-  static const String _initialized_key = 'data_initialized_v1';
-  static const String _students_key = 'students_data';
-  static const String _teachers_key = 'teachers_data';
+  static const String _initKey = 'data_initialized';
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Check if data has been initialized
-  static Future<bool> isDataInitialized() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_initialized_key) ?? false;
+  /// Load test data from JSON
+  static Future<Map<String, dynamic>?> _loadTestData() async {
+    try {
+      final String jsonString = await rootBundle.loadString('assets/test_data.json');
+      final data = json.decode(jsonString) as Map<String, dynamic>;
+      print('✅ Test data loaded from JSON');
+      return data;
+    } catch (e) {
+      print('❌ Error loading test data: $e');
+      return null;
+    }
   }
 
-  /// Initialize all data from test_data.json
-  static Future<bool> initializeAllData() async {
+  /// Initialize all data from test_data.json to Firestore
+  static Future<bool> initializeAllData({bool forceReinit = false}) async {
     try {
-      print('🚀 Starting data initialization...');
+      final prefs = await SharedPreferences.getInstance();
+      final isInitialized = prefs.getBool(_initKey) ?? false;
 
-      // Check if already initialized
-      final alreadyInitialized = await isDataInitialized();
-      if (alreadyInitialized) {
+      // Skip if already initialized and not forcing
+      if (isInitialized && !forceReinit) {
         print('ℹ️ Data already initialized, skipping...');
         return true;
       }
 
-      // Load JSON file from assets
-      final jsonString = await rootBundle.loadString('assets/test_data.json');
-      final Map<String, dynamic> data = json.decode(jsonString);
+      print('🚀 Starting Firestore data initialization...');
 
-      print('✅ JSON file loaded successfully');
-
-      // Initialize students
-      final studentsData = data['students'] as List<dynamic>;
-      final bool studentsInitialized = await _initializeStudents(studentsData);
-
-      // Initialize teachers
-      final teachersData = data['teachers'] as List<dynamic>;
-      final bool teachersInitialized = await _initializeTeachers(teachersData);
-
-      // Mark as initialized
-      if (studentsInitialized && teachersInitialized) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(_initialized_key, true);
-        print('✅ All data initialized successfully!');
-        print('📊 Students: ${studentsData.length}');
-        print('👨‍🏫 Teachers: ${teachersData.length}');
-        return true;
+      // Load test data
+      final testData = await _loadTestData();
+      if (testData == null) {
+        print('❌ Failed to load test data');
+        return false;
       }
 
-      return false;
-    } catch (e) {
-      print('❌ Error initializing data: $e');
-      return false;
-    }
-  }
+      // Initialize students
+      final studentService = StudentService();
+      final students = testData['students'] as List<dynamic>? ?? [];
 
-  /// Initialize students data
-  static Future<bool> _initializeStudents(List<dynamic> studentsData) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+      if (students.isNotEmpty) {
+        print('📝 Initializing ${students.length} students...');
 
-      // Convert to StudentModel list
-      final students = studentsData.map((json) => StudentModel.fromJson(json)).toList();
+        // Clear existing data if forcing reinit
+        if (forceReinit) {
+          await studentService.clearAllStudents();
+        }
 
-      // Save to SharedPreferences
-      final studentsJson = json.encode(students.map((s) => s.toJson()).toList());
-      await prefs.setString(_students_key, studentsJson);
+        final studentsData = students.map((s) => s as Map<String, dynamic>).toList();
+        await studentService.initializeSampleData(studentsData);
+        print('✅ Students initialized successfully');
+      }
 
-      print('✅ Initialized ${students.length} students');
+      // Initialize teachers
+      final teacherService = TeacherService();
+      final teachers = testData['teachers'] as List<dynamic>? ?? [];
+
+      if (teachers.isNotEmpty) {
+        print('📝 Initializing ${teachers.length} teachers...');
+
+        // Clear existing data if forcing reinit
+        if (forceReinit) {
+          await teacherService.clearAllTeachers();
+        }
+
+        // Add teachers one by one
+        for (var teacherData in teachers) {
+          await teacherService.addTeacher(teacherData as Map<String, dynamic>);
+        }
+        print('✅ Teachers initialized successfully');
+      }
+
+      // Initialize sample activities
+      await _initializeSampleActivities();
+
+      // Mark as initialized
+      await prefs.setBool(_initKey, true);
+      print('✅ All data initialization complete!');
+
       return true;
     } catch (e) {
-      print('❌ Error initializing students: $e');
+      print('❌ Data initialization error: $e');
       return false;
     }
   }
 
-  /// Initialize teachers data
-  static Future<bool> _initializeTeachers(List<dynamic> teachersData) async {
+  /// Initialize sample activities
+  static Future<void> _initializeSampleActivities() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final activitiesRef = _firestore.collection('activities');
 
-      // Save teachers as JSON
-      final teachersJson = json.encode(teachersData);
-      await prefs.setString(_teachers_key, teachersJson);
+      // Check if activities already exist
+      final existingActivities = await activitiesRef.limit(1).get();
+      if (existingActivities.docs.isNotEmpty) {
+        print('ℹ️ Activities already exist, skipping initialization');
+        return;
+      }
 
-      print('✅ Initialized ${teachersData.length} teachers');
-      return true;
+      final sampleActivities = [
+        {
+          'type': 'student',
+          'title': 'New Student Admission',
+          'description': 'Rahul Kumar admitted to Class 5-A',
+          'userName': 'Rahul Kumar',
+          'timestamp': FieldValue.serverTimestamp(),
+          'metadata': {'student_name': 'Rahul Kumar', 'class': '5-A'}
+        },
+        {
+          'type': 'teacher',
+          'title': 'New Teacher Joined',
+          'description': 'Ms. Priya Singh joined as Mathematics teacher',
+          'userName': 'Ms. Priya Singh',
+          'timestamp': FieldValue.serverTimestamp(),
+          'metadata': {'teacher_name': 'Priya Singh', 'subject': 'Mathematics'}
+        },
+        {
+          'type': 'announcement',
+          'title': 'School Event',
+          'description': 'Annual Day celebrations scheduled for next month',
+          'userName': 'Admin',
+          'timestamp': FieldValue.serverTimestamp(),
+          'metadata': {'event_type': 'Annual Day'}
+        },
+      ];
+
+      final batch = _firestore.batch();
+      for (var activity in sampleActivities) {
+        final docRef = activitiesRef.doc();
+        batch.set(docRef, activity);
+      }
+      await batch.commit();
+
+      print('✅ Sample activities initialized');
     } catch (e) {
-      print('❌ Error initializing teachers: $e');
-      return false;
+      print('❌ Error initializing activities: $e');
     }
   }
 
-  /// Force re-initialization (useful for testing or updates)
-  static Future<bool> forceReinitialize() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Clear initialization flag
-      await prefs.remove(_initialized_key);
-
-      // Clear existing data
-      await prefs.remove(_students_key);
-      await prefs.remove(_teachers_key);
-
-      print('🔄 Cleared existing data, re-initializing...');
-
-      // Re-initialize
-      return await initializeAllData();
-    } catch (e) {
-      print('❌ Error during force re-initialization: $e');
-      return false;
-    }
-  }
-
-  /// Get initialization status details
+  /// Get initialization status
   static Future<Map<String, dynamic>> getInitializationStatus() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final isInitialized = prefs.getBool(_initialized_key) ?? false;
+      final isInitialized = prefs.getBool(_initKey) ?? false;
 
-      int studentCount = 0;
-      int teacherCount = 0;
-
-      if (isInitialized) {
-        // Get student count
-        final studentsJson = prefs.getString(_students_key);
-        if (studentsJson != null) {
-          final List<dynamic> studentsList = json.decode(studentsJson);
-          studentCount = studentsList.length;
-        }
-
-        // Get teacher count
-        final teachersJson = prefs.getString(_teachers_key);
-        if (teachersJson != null) {
-          final List<dynamic> teachersList = json.decode(teachersJson);
-          teacherCount = teachersList.length;
-        }
+      if (!isInitialized) {
+        return {
+          'initialized': false,
+          'student_count': 0,
+          'teacher_count': 0,
+        };
       }
 
+      // Get counts from Firestore
+      final studentsSnapshot = await _firestore.collection('students').get();
+      final teachersSnapshot = await _firestore.collection('teachers').get();
+
       return {
-        'is_initialized': isInitialized,
-        'student_count': studentCount,
-        'teacher_count': teacherCount,
+        'initialized': true,
+        'student_count': studentsSnapshot.docs.length,
+        'teacher_count': teachersSnapshot.docs.length,
       };
     } catch (e) {
       print('❌ Error getting initialization status: $e');
       return {
-        'is_initialized': false,
+        'initialized': false,
         'student_count': 0,
         'teacher_count': 0,
       };
+    }
+  }
+
+  /// Clear initialization flag
+  static Future<void> clearInitializationFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_initKey);
+    print('✅ Initialization flag cleared');
+  }
+
+  /// Reset all data (use with caution!)
+  static Future<bool> resetAllData() async {
+    try {
+      print('⚠️ Resetting all data...');
+
+      // Clear students
+      final studentService = StudentService();
+      await studentService.clearAllStudents();
+
+      // Clear teachers
+      final teacherService = TeacherService();
+      await teacherService.clearAllTeachers();
+
+      // Clear activities
+      final activitiesSnapshot = await _firestore.collection('activities').get();
+      final batch = _firestore.batch();
+      for (var doc in activitiesSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // Clear initialization flag
+      await clearInitializationFlag();
+
+      print('✅ All data reset complete');
+      return true;
+    } catch (e) {
+      print('❌ Error resetting data: $e');
+      return false;
     }
   }
 }

@@ -1,172 +1,207 @@
-// lib/presentation/providers/dashboard_provider.dart (UPDATED)
+// lib/presentation/providers/dashboard_provider.dart (FINAL VERSION)
 
-import 'package:flutter/foundation.dart';
 import 'dart:async';
-import '../../data/models/dashboard_stats_model.dart';
-import '../../data/repositories/dashboard_repository.dart';
-import '../../data/services/dashboard_service.dart';
-import '../../data/services/activity_service.dart';
-import '../../data/services/api_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../domain/models/dashboard_stats.dart';
+import '../../domain/models/activity.dart';
 
 class DashboardProvider with ChangeNotifier {
-  final DashboardRepository _dashboardRepository;
-  StreamSubscription<List<RecentActivity>>? _activitiesSubscription;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  DashboardProvider({DashboardRepository? dashboardRepository})
-      : _dashboardRepository = dashboardRepository ??
-      DashboardRepository(
-        dashboardService: DashboardService(ApiService()),
-        activityService: ActivityService(),
-      );
-
-  // State
   DashboardStats? _stats;
-  List<RecentActivity> _recentActivities = [];
+  List<Activity> _recentActivities = [];
   bool _isLoading = false;
-  bool _isActivitiesLoading = false;
-  String? _error;
+  String? _errorMessage;
 
   // Getters
   DashboardStats? get stats => _stats;
-  List<RecentActivity> get recentActivities => _recentActivities;
+  List<Activity> get recentActivities => _recentActivities;
   bool get isLoading => _isLoading;
-  bool get isActivitiesLoading => _isActivitiesLoading;
-  String? get error => _error;
-  bool get hasData => _stats != null;
+  String? get errorMessage => _errorMessage;
 
-  /// Initialize real-time listeners
+  // Real-time listeners
+  StreamSubscription<QuerySnapshot>? _studentsSubscription;
+  StreamSubscription<QuerySnapshot>? _activitiesSubscription;
+
+  // Initialize real-time updates
   void initializeRealTimeUpdates() {
-    // Listen to activities stream for real-time updates
-    _activitiesSubscription?.cancel();
-    _activitiesSubscription = _dashboardRepository
-        .getActivitiesStream(limit: 10)
-        .listen((activities) {
-      _recentActivities = activities;
-      notifyListeners();
-    }, onError: (error) {
-      print('❌ Activities stream error: $error');
+    print('🔄 Initializing real-time Firestore updates...');
+
+    try {
+      // Listen to students collection
+      _studentsSubscription = _firestore
+          .collection('students')
+          .snapshots()
+          .listen(
+            (snapshot) {
+          print('📊 Students updated: ${snapshot.docs.length} documents');
+          // Schedule refresh on platform thread to avoid threading errors
+          _safeRefreshDashboard();
+        },
+        onError: (error) {
+          print('❌ Error listening to students: $error');
+        },
+      );
+
+      // Listen to activities collection
+      _activitiesSubscription = _firestore
+          .collection('activities')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .snapshots()
+          .listen(
+            (snapshot) {
+          print('📊 Activities updated: ${snapshot.docs.length} documents');
+          // Schedule loading on platform thread to avoid threading errors
+          _safeLoadActivitiesFromSnapshot(snapshot);
+        },
+        onError: (error) {
+          print('❌ Error listening to activities: $error');
+        },
+      );
+
+      // Initial load
+      refreshDashboard();
+      loadRecentActivities();
+    } catch (e) {
+      print('❌ Error initializing real-time updates: $e');
+    }
+  }
+
+  // Thread-safe refresh that ensures execution on platform thread
+  void _safeRefreshDashboard() {
+    // Use addPostFrameCallback to ensure we're on the platform thread
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      refreshDashboard();
     });
   }
 
-  /// Fetch dashboard statistics
-  Future<void> fetchDashboardStats() async {
-    _isLoading = true;
-    notifyListeners();
+  // Thread-safe activity loading
+  void _safeLoadActivitiesFromSnapshot(QuerySnapshot snapshot) {
+    // Use addPostFrameCallback to ensure we're on the platform thread
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _loadActivitiesFromSnapshot(snapshot);
+    });
+  }
 
+  // Load activities from snapshot
+  void _loadActivitiesFromSnapshot(QuerySnapshot snapshot) {
     try {
-      _stats = await _dashboardRepository.fetchDashboardStats();
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-      print('❌ Error in fetchDashboardStats: $e');
-    } finally {
-      _isLoading = false;
+      _recentActivities = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Activity(
+          id: doc.id,
+          type: data['type'] ?? 'info',
+          title: data['title'] ?? '',
+          description: data['description'] ?? '',
+          timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          metadata: data['metadata'] as Map<String, dynamic>? ?? {},
+        );
+      }).toList();
       notifyListeners();
+    } catch (e) {
+      print('❌ Error loading activities: $e');
     }
   }
 
-  /// Fetch recent activities
-  Future<void> fetchRecentActivities() async {
-    _isActivitiesLoading = true;
-    notifyListeners();
-
-    try {
-      _recentActivities = await _dashboardRepository.fetchRecentActivities(limit: 10);
-    } catch (e) {
-      print('❌ Error in fetchRecentActivities: $e');
-    } finally {
-      _isActivitiesLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Refresh all dashboard data
+  // Refresh dashboard stats
   Future<void> refreshDashboard() async {
-    await Future.wait([
-      fetchDashboardStats(),
-      fetchRecentActivities(),
-    ]);
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // Get students count
+      final studentsSnapshot = await _firestore.collection('students').get();
+      final totalStudents = studentsSnapshot.docs.length;
+
+      // Get teachers count
+      final teachersSnapshot = await _firestore.collection('teachers').get();
+      final totalTeachers = teachersSnapshot.docs.length;
+
+      // Calculate class count
+      final studentsByClass = <String>{};
+      for (var doc in studentsSnapshot.docs) {
+        final data = doc.data();
+        final className = data['class'] ?? '';
+        if (className.isNotEmpty) {
+          studentsByClass.add(className);
+        }
+      }
+
+      // Create stats with required parameters only
+      _stats = DashboardStats(
+        totalStudents: totalStudents,
+        totalTeachers: totalTeachers,
+        totalClasses: studentsByClass.length,
+        averageAttendance: 92.5, // Mock data
+        totalFeesCollected: 450000.0, // Mock data
+        totalFeesPending: 50000.0, // Mock data
+        feeCollectionRate: 90.0, // Mock data
+        weeklyAttendance: [], // Empty for now
+      );
+
+      _isLoading = false;
+      print('✅ Dashboard refreshed: $totalStudents students, $totalTeachers teachers');
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to refresh dashboard: $e';
+      _isLoading = false;
+      print('❌ Error refreshing dashboard: $e');
+      notifyListeners();
+    }
   }
 
-  /// Get student growth trend
+  // Load recent activities
+  Future<void> loadRecentActivities() async {
+    try {
+      final snapshot = await _firestore
+          .collection('activities')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .get();
+
+      _loadActivitiesFromSnapshot(snapshot);
+    } catch (e) {
+      print('❌ Error loading activities: $e');
+    }
+  }
+
+  // Helper methods for trends
   String getStudentGrowthTrend() {
-    if (_stats == null) return '+0%';
-    // Mock calculation - in real app, compare with previous month
-    return '+5.2%';
+    return '+5%';
   }
 
-  /// Get teacher growth trend
   String getTeacherGrowthTrend() {
-    if (_stats == null) return '+0%';
-    return '+2.1%';
+    return '+2%';
   }
 
-  /// Get attendance trend
   String getAttendanceTrend() {
-    if (_stats == null) return '+0%';
     return '+1.5%';
   }
 
-  /// Get fee collection trend
-  String getFeeCollectionTrend() {
-    if (_stats == null) return '+0%';
-    return '+3.2%';
-  }
-
-  /// Format currency
-  String formatCurrency(double amount) {
-    if (amount >= 10000000) {
-      return '₹${(amount / 10000000).toStringAsFixed(2)} Cr';
-    } else if (amount >= 100000) {
-      return '₹${(amount / 100000).toStringAsFixed(2)} L';
-    } else if (amount >= 1000) {
-      return '₹${(amount / 1000).toStringAsFixed(2)} K';
-    }
-    return '₹${amount.toStringAsFixed(0)}';
-  }
-
-  /// Format number with suffix
-  String formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
-    }
-    return number.toString();
-  }
-
-  /// Get time ago string
-  String getTimeAgo(DateTime dateTime) {
+  String getTimeAgo(DateTime timestamp) {
     final now = DateTime.now();
-    final difference = now.difference(dateTime);
+    final difference = now.difference(timestamp);
 
-    if (difference.inDays > 365) {
-      final years = (difference.inDays / 365).floor();
-      return '$years ${years == 1 ? 'year' : 'years'} ago';
-    } else if (difference.inDays > 30) {
-      final months = (difference.inDays / 30).floor();
-      return '$months ${months == 1 ? 'month' : 'months'} ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
-    } else {
+    if (difference.inMinutes < 1) {
       return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${(difference.inDays / 7).floor()}w ago';
     }
-  }
-
-  /// Clear data
-  void clearData() {
-    _stats = null;
-    _recentActivities = [];
-    _error = null;
-    notifyListeners();
   }
 
   @override
   void dispose() {
+    _studentsSubscription?.cancel();
     _activitiesSubscription?.cancel();
     super.dispose();
   }

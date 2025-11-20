@@ -1,29 +1,29 @@
-// ==========================================
-// COMPLETE ANNOUNCEMENT CREATION SCREEN
-// lib/presentation/screens/announcements/create_announcement_screen.dart
-// ==========================================
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
+import '../../../data/models/announcement_model.dart';
 import '../../providers/announcement_provider.dart';
 
-class CreateAnnouncementScreen extends StatefulWidget {
-  const CreateAnnouncementScreen({Key? key}) : super(key: key);
+class EditAnnouncementScreen extends StatefulWidget {
+  final AnnouncementModel announcement;
+
+  const EditAnnouncementScreen({
+    Key? key,
+    required this.announcement,
+  }) : super(key: key);
 
   @override
-  State<CreateAnnouncementScreen> createState() => _CreateAnnouncementScreenState();
+  State<EditAnnouncementScreen> createState() => _EditAnnouncementScreenState();
 }
 
-class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
+class _EditAnnouncementScreenState extends State<EditAnnouncementScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _messageController = TextEditingController();
+  late TextEditingController _titleController;
+  late TextEditingController _messageController;
 
-  String _selectedType = 'general';
-  String _selectedPriority = 'medium';
-  List<String> _selectedAudience = ['all'];
-  List<String> _selectedClasses = [];
+  late String _selectedType;
+  late String _selectedPriority;
+  late List<String> _selectedAudience;
+  late List<String> _selectedClasses;
   DateTime? _expiryDate;
   bool _isLoading = false;
 
@@ -37,61 +37,56 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.announcement.title);
+    _messageController = TextEditingController(text: widget.announcement.message);
+    _selectedType = widget.announcement.type;
+    _selectedPriority = widget.announcement.priority;
+    _selectedAudience = List.from(widget.announcement.targetAudience);
+    _selectedClasses = List.from(widget.announcement.targetClasses);
+    _expiryDate = widget.announcement.expiryDate;
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
-  Future<void> _createAnnouncement() async {
+  Future<void> _updateAnnouncement() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.currentUser;
-
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not found. Please login again.')),
-      );
-      setState(() => _isLoading = false);
-      return;
-    }
-
     try {
-      final success = await context.read<AnnouncementProvider>().createAnnouncement(
+      final success = await context.read<AnnouncementProvider>().updateAnnouncement(
+        id: widget.announcement.id,
         title: _titleController.text.trim(),
         message: _messageController.text.trim(),
         type: _selectedType,
         priority: _selectedPriority,
         targetAudience: _selectedAudience,
         targetClasses: _selectedClasses.isEmpty ? null : _selectedClasses,
-        createdBy: user.id,
-        createdByName: user.name,
-        createdByRole: user.role?.name ?? 'admin',
         expiryDate: _expiryDate,
       );
 
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Announcement created successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pop(context);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create announcement'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Announcement updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update announcement'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -113,7 +108,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Announcement'),
+        title: const Text('Edit Announcement'),
         backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       body: _isLoading
@@ -130,7 +125,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                 controller: _titleController,
                 decoration: const InputDecoration(
                   labelText: 'Title *',
-                  hintText: 'Enter announcement title',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
@@ -147,7 +141,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                 controller: _messageController,
                 decoration: const InputDecoration(
                   labelText: 'Message *',
-                  hintText: 'Enter announcement message',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 6,
@@ -230,7 +223,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Target Classes (Optional)
+              // Target Classes
               const Text(
                 'Target Classes (Optional)',
                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -257,7 +250,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Expiry Date (Optional)
+              // Expiry Date
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Expiry Date (Optional)'),
@@ -281,7 +274,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
-                          initialDate: DateTime.now().add(const Duration(days: 7)),
+                          initialDate: _expiryDate ?? DateTime.now().add(const Duration(days: 7)),
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
                         );
@@ -295,26 +288,17 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Submit Button
+              // Update Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _createAnnouncement,
+                  onPressed: _isLoading ? null : _updateAnnouncement,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                      : const Text(
-                    'Create Announcement',
+                  child: const Text(
+                    'Update Announcement',
                     style: TextStyle(fontSize: 16),
                   ),
                 ),

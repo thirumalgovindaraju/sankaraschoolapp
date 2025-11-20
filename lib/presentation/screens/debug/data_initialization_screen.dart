@@ -1,9 +1,10 @@
-// lib/presentation/screens/debug/data_initialization_screen.dart
+// lib/presentation/screens/debug/data_initialization_screen.dart (FIXED)
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/services/data_initialization_service.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/teacher_provider.dart';
 
 class DataInitializationScreen extends StatefulWidget {
   const DataInitializationScreen({Key? key}) : super(key: key);
@@ -34,25 +35,45 @@ class _DataInitializationScreenState extends State<DataInitializationScreen> {
   Future<void> _forceReinitialize() async {
     setState(() => _isLoading = true);
 
-    final success = await DataInitializationService.forceReinitialize();
+    try {
+      // Reset data first
+      await DataInitializationService.resetAllData();
 
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Data re-initialized successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      // Then initialize fresh data
+      final success = await DataInitializationService.initializeAllData(forceReinit: true);
 
-      // Reload student provider
-      context.read<StudentProvider>().loadStudents();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Failed to re-initialize data'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Data re-initialized successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Reload providers
+        if (mounted) {
+          await Future.wait([
+            context.read<StudentProvider>().loadStudents(),
+            context.read<TeacherProvider>().loadTeachers(),
+          ]);
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to re-initialize data'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
 
     await _checkStatus();
@@ -87,17 +108,17 @@ class _DataInitializationScreenState extends State<DataInitializationScreen> {
                     Row(
                       children: [
                         Icon(
-                          _status['is_initialized'] == true
+                          _status['initialized'] == true
                               ? Icons.check_circle
                               : Icons.error,
-                          color: _status['is_initialized'] == true
+                          color: _status['initialized'] == true
                               ? Colors.green
                               : Colors.red,
                           size: 32,
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          _status['is_initialized'] == true
+                          _status['initialized'] == true
                               ? 'Data Initialized'
                               : 'Not Initialized',
                           style: const TextStyle(
@@ -223,6 +244,26 @@ class _DataInitializationScreenState extends State<DataInitializationScreen> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            // View Teachers Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/manage-teachers');
+                },
+                icon: const Icon(Icons.person),
+                label: const Text('View Teachers'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
 
             // Info Card
@@ -254,7 +295,7 @@ class _DataInitializationScreenState extends State<DataInitializationScreen> {
                       '• Data is loaded from assets/test_data.json\n'
                           '• Initialization happens automatically on first launch\n'
                           '• Use "Force Re-initialize" to reload fresh data\n'
-                          '• All data is stored in SharedPreferences',
+                          '• All data is stored in Firestore',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.blue[900],

@@ -7,7 +7,7 @@ import '../../../data/models/user_model.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../announcements/announcement_detail_screen.dart';
-import '../academic/create_announcement_screen.dart';
+import '../announcements/create_announcement_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
   const AnnouncementsScreen({Key? key}) : super(key: key);
@@ -35,8 +35,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
   }
 
   void _loadAnnouncements() {
+    final authProvider = context.read<AuthProvider>();
+    final userId = authProvider.currentUser?.id;
+    final userRole = authProvider.currentUser?.role?.name;
+
     final provider = context.read<AnnouncementProvider>();
-    provider.fetchAnnouncements();
+    provider.fetchAnnouncements(
+      userRole: userRole,
+      userId: userId,
+    );
   }
 
   @override
@@ -58,7 +65,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
       );
     }
 
-    final canCreate = user.role == 'admin' || user.role == 'teacher';
+    final canCreate = user.role?.name == 'admin' || user.role?.name == 'teacher';
 
     return Scaffold(
       appBar: AppBar(
@@ -110,7 +117,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
               padding: const EdgeInsets.all(16),
               itemCount: announcements.length,
               itemBuilder: (context, index) {
-                return _buildAnnouncementCard(announcements[index], user);
+                return _buildAnnouncementCard(announcements[index]);
               },
             ),
           );
@@ -127,13 +134,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
     );
   }
 
-  Widget _buildAnnouncementCard(AnnouncementModel announcement, UserModel user) {
+  Widget _buildAnnouncementCard(AnnouncementModel announcement) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () => _navigateToDetail(announcement, user),
+        onTap: () => _navigateToDetail(announcement),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -145,7 +152,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
                 children: [
                   _buildPriorityBadge(announcement.priority),
                   const SizedBox(width: 8),
-                  _buildCategoryChip(announcement.category),
+                  _buildCategoryChip(announcement.type), // Use type instead of category
                   const Spacer(),
                   if (announcement.isPinned)
                     const Icon(
@@ -169,9 +176,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
               ),
               const SizedBox(height: 8),
 
-              // Content Preview
+              // Content Preview (use message instead of content)
               Text(
-                announcement.content,
+                announcement.message,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[700],
@@ -253,7 +260,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color),
       ),
@@ -279,7 +286,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -425,7 +432,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
             ListTile(
               title: const Text('Events'),
               leading: Radio<String>(
-                value: 'events',
+                value: 'event',
                 groupValue: _selectedFilter,
                 onChanged: (value) {
                   setState(() {
@@ -437,9 +444,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
               ),
             ),
             ListTile(
-              title: const Text('Emergency'),
+              title: const Text('Urgent'),
               leading: Radio<String>(
-                value: 'emergency',
+                value: 'urgent',
                 groupValue: _selectedFilter,
                 onChanged: (value) {
                   setState(() {
@@ -462,13 +469,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
     );
   }
 
-  void _navigateToDetail(AnnouncementModel announcement, UserModel user) {
+  void _navigateToDetail(AnnouncementModel announcement) {
+    // ✅ FIXED - Remove user parameter
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AnnouncementDetailScreen(
           announcement: announcement,
-          user: user,
         ),
       ),
     );

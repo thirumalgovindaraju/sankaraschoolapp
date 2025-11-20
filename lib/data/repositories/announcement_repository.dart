@@ -1,37 +1,61 @@
-// lib/data/repositories/announcement_repository.dart
+// lib/data/repositories/announcement_repository.dart (FIXED VERSION)
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/announcement_model.dart';
-import '../services/announcement_service.dart';
 
 class AnnouncementRepository {
-  final AnnouncementService _announcementService;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _collection = 'announcements';
 
-  AnnouncementRepository({AnnouncementService? announcementService})
-      : _announcementService = announcementService ?? AnnouncementService();
+  // ============================================================================
+  // CREATE
+  // ============================================================================
 
-  // Create announcement - returns bool
   Future<bool> createAnnouncement(AnnouncementModel announcement) async {
     try {
-      final result = await _announcementService.createAnnouncement(
+      // Generate a unique ID if not provided
+      final docId = announcement.id.isEmpty
+          ? _firestore.collection(_collection).doc().id
+          : announcement.id;
+
+      final announcementWithId = AnnouncementModel(
+        id: docId,
         title: announcement.title,
         message: announcement.message,
         type: announcement.type,
         priority: announcement.priority,
         targetAudience: announcement.targetAudience,
-        targetClasses: announcement.targetClasses.isNotEmpty ? announcement.targetClasses : null,
-        targetStudents: announcement.targetStudents,
+        targetClasses: announcement.targetClasses,
+        createdBy: announcement.createdBy,
+        createdByName: announcement.createdByName,
+        createdByRole: announcement.createdByRole,
+        createdAt: announcement.createdAt,
         expiryDate: announcement.expiryDate,
+        attachments: announcement.attachments,
+        readBy: announcement.readBy,
+        targetStudents: announcement.targetStudents,
         attachmentUrl: announcement.attachmentUrl,
         attachmentName: announcement.attachmentName,
+        isActive: announcement.isActive,
       );
-      return result['success'] == true;
+
+      await _firestore
+          .collection(_collection)
+          .doc(docId)
+          .set(announcementWithId.toJson());
+
+      print('✅ Announcement created in Firestore: $docId');
+      return true;
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error creating announcement: $e');
       return false;
     }
   }
 
-  // Get announcements with filtering
+  // ============================================================================
+  // READ
+  // ============================================================================
+
   Future<List<AnnouncementModel>> getAnnouncements({
     String? userRole,
     String? userId,
@@ -40,186 +64,172 @@ class AnnouncementRepository {
     int limit = 20,
   }) async {
     try {
-      final result = await _announcementService.getAnnouncements(
-        userRole: userRole,
-        userId: userId,
-        activeOnly: activeOnly,
-        page: page,
-        limit: limit,
-      );
+      Query query = _firestore.collection(_collection);
 
-      if (result['success'] == true && result['announcements'] != null) {
-        return result['announcements'] as List<AnnouncementModel>;
+      // Filter by active status
+      if (activeOnly) {
+        query = query.where('isActive', isEqualTo: true);
       }
-      return [];
+
+      // Filter by target audience (role)
+      if (userRole != null) {
+        query = query.where('targetAudience', arrayContains: userRole);
+      }
+
+      // Order by creation date (newest first)
+      query = query.orderBy('createdAt', descending: true);
+
+      // Apply pagination
+      query = query.limit(limit);
+      if (page > 1) {
+        query = query.startAfter([(page - 1) * limit]);
+      }
+
+      final snapshot = await query.get();
+
+      final announcements = snapshot.docs
+          .map((doc) => AnnouncementModel.fromJson({
+        ...doc.data() as Map<String, dynamic>,
+        'id': doc.id,
+      }))
+          .toList();
+
+      print('✅ Fetched ${announcements.length} announcements from Firestore');
+      return announcements;
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error fetching announcements: $e');
       return [];
     }
   }
 
-  // Get announcement by ID
   Future<AnnouncementModel?> getAnnouncementById(String id) async {
     try {
-      final result = await _announcementService.getAnnouncementById(id);
+      final doc = await _firestore.collection(_collection).doc(id).get();
 
-      if (result['success'] == true && result['announcement'] != null) {
-        return result['announcement'] as AnnouncementModel;
+      if (!doc.exists) {
+        print('⚠️ Announcement not found: $id');
+        return null;
       }
+
+      return AnnouncementModel.fromJson({
+        ...doc.data() as Map<String, dynamic>,
+        'id': doc.id,
+      });
+    } catch (e) {
+      print('❌ Error fetching announcement by ID: $e');
       return null;
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return null;
     }
   }
 
-  // Get announcements by type
-  Future<List<AnnouncementModel>> getAnnouncementsByType({
-    required String type,
-    String? userRole,
-  }) async {
-    try {
-      final result = await _announcementService.getAnnouncementsByType(type);
-
-      if (result['success'] == true && result['announcements'] != null) {
-        return result['announcements'] as List<AnnouncementModel>;
-      }
-      return [];
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return [];
-    }
-  }
-
-  // Mark announcement as read
-  Future<bool> markAsRead({
-    required String announcementId,
-    required String userId,
-  }) async {
-    try {
-      final result = await _announcementService.markAsRead(announcementId, userId);
-      return result['success'] == true;
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return false;
-    }
-  }
-
-  // Update announcement - returns bool
-  Future<bool> updateAnnouncement({
-    required String id,
-    required AnnouncementModel announcement,
-  }) async {
-    try {
-      final result = await _announcementService.updateAnnouncement(
-        id: id,
-        title: announcement.title,
-        message: announcement.message,
-        type: announcement.type,
-        priority: announcement.priority,
-        targetAudience: announcement.targetAudience,
-        targetClasses: announcement.targetClasses.isNotEmpty ? announcement.targetClasses : null,
-        expiryDate: announcement.expiryDate,
-        isActive: announcement.isActive,
-      );
-      return result['success'] == true;
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return false;
-    }
-  }
-
-  // Delete announcement - returns bool
-  Future<bool> deleteAnnouncement(String id) async {
-    try {
-      final result = await _announcementService.deleteAnnouncement(id);
-      return result['success'] == true;
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return false;
-    }
-  }
-
-  // Get unread announcements count
-  Future<int> getUnreadCount(String userId) async {
-    try {
-      final result = await _announcementService.getUnreadCount(userId);
-      if (result['success'] == true) {
-        return result['count'] ?? 0;
-      }
-      return 0;
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return 0;
-    }
-  }
-
-  // Get recent announcements (for dashboard)
   Future<List<AnnouncementModel>> getRecentAnnouncements({
     String? userRole,
     String? userId,
     int limit = 5,
   }) async {
-    try {
-      return await getAnnouncements(
-        userRole: userRole,
-        userId: userId,
-        activeOnly: true,
-        page: 1,
-        limit: limit,
-      );
-    } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return [];
-    }
+    return await getAnnouncements(
+      userRole: userRole,
+      userId: userId,
+      activeOnly: true,
+      page: 1,
+      limit: limit,
+    );
   }
 
-  // Get urgent announcements
   Future<List<AnnouncementModel>> getUrgentAnnouncements({
     String? userRole,
     String? userId,
   }) async {
     try {
-      final allAnnouncements = await getAnnouncements(
-        userRole: userRole,
-        userId: userId,
-        activeOnly: true,
-      );
+      Query query = _firestore.collection(_collection)
+          .where('isActive', isEqualTo: true)
+          .where('priority', isEqualTo: 'high');
 
-      return allAnnouncements
-          .where((announcement) =>
-      announcement.priority == 'high' ||
-          announcement.type == 'urgent')
+      if (userRole != null) {
+        query = query.where('targetAudience', arrayContains: userRole);
+      }
+
+      query = query.orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+
+      return snapshot.docs
+          .map((doc) => AnnouncementModel.fromJson({
+        ...doc.data() as Map<String, dynamic>,
+        'id': doc.id,
+      }))
           .toList();
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error fetching urgent announcements: $e');
       return [];
     }
   }
 
-  // Get academic announcements
-  Future<List<AnnouncementModel>> getAcademicAnnouncements({
-    String? userId,
-    String? userRole,
+  // ============================================================================
+  // UPDATE
+  // ============================================================================
+
+  Future<bool> updateAnnouncement({
+    required String id,
+    required AnnouncementModel announcement,
   }) async {
     try {
-      return await getAnnouncementsByType(
-        type: 'academic',
-        userRole: userRole,
-      );
+      await _firestore
+          .collection(_collection)
+          .doc(id)
+          .update(announcement.toJson());
+
+      print('✅ Announcement updated: $id');
+      return true;
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
-      return [];
+      print('❌ Error updating announcement: $e');
+      return false;
     }
   }
 
-  // Search announcements
+  Future<bool> markAsRead({
+    required String announcementId,
+    required String userId,
+  }) async {
+    try {
+      await _firestore.collection(_collection).doc(announcementId).update({
+        'readBy': FieldValue.arrayUnion([userId]),
+      });
+
+      print('✅ Announcement marked as read: $announcementId by $userId');
+      return true;
+    } catch (e) {
+      print('❌ Error marking announcement as read: $e');
+      return false;
+    }
+  }
+
+  // ============================================================================
+  // DELETE
+  // ============================================================================
+
+  Future<bool> deleteAnnouncement(String id) async {
+    try {
+      await _firestore.collection(_collection).doc(id).delete();
+      print('✅ Announcement deleted: $id');
+      return true;
+    } catch (e) {
+      print('❌ Error deleting announcement: $e');
+      return false;
+    }
+  }
+
+  // ============================================================================
+  // SEARCH & FILTER
+  // ============================================================================
+
   Future<List<AnnouncementModel>> searchAnnouncements({
     required String query,
     String? userRole,
     String? userId,
   }) async {
     try {
+      // Note: Firestore doesn't support full-text search natively
+      // This is a basic implementation - consider using Algolia for production
       final allAnnouncements = await getAnnouncements(
         userRole: userRole,
         userId: userId,
@@ -232,12 +242,40 @@ class AnnouncementRepository {
           announcement.message.toLowerCase().contains(query.toLowerCase()))
           .toList();
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error searching announcements: $e');
       return [];
     }
   }
 
-  // Get announcements by date range
+  Future<List<AnnouncementModel>> getAnnouncementsByType({
+    required String type,
+    String? userRole,
+  }) async {
+    try {
+      Query query = _firestore.collection(_collection)
+          .where('isActive', isEqualTo: true)
+          .where('type', isEqualTo: type);
+
+      if (userRole != null) {
+        query = query.where('targetAudience', arrayContains: userRole);
+      }
+
+      query = query.orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+
+      return snapshot.docs
+          .map((doc) => AnnouncementModel.fromJson({
+        ...doc.data() as Map<String, dynamic>,
+        'id': doc.id,
+      }))
+          .toList();
+    } catch (e) {
+      print('❌ Error fetching announcements by type: $e');
+      return [];
+    }
+  }
+
   Future<List<AnnouncementModel>> getAnnouncementsByDateRange({
     required DateTime startDate,
     required DateTime endDate,
@@ -245,24 +283,57 @@ class AnnouncementRepository {
     String? userId,
   }) async {
     try {
-      final allAnnouncements = await getAnnouncements(
-        userRole: userRole,
-        userId: userId,
-        activeOnly: false,
-      );
+      Query query = _firestore.collection(_collection)
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
 
-      return allAnnouncements
-          .where((announcement) =>
-      announcement.createdAt.isAfter(startDate) &&
-          announcement.createdAt.isBefore(endDate))
+      if (userRole != null) {
+        query = query.where('targetAudience', arrayContains: userRole);
+      }
+
+      query = query.orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+
+      return snapshot.docs
+          .map((doc) => AnnouncementModel.fromJson({
+        ...doc.data() as Map<String, dynamic>,
+        'id': doc.id,
+      }))
           .toList();
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error fetching announcements by date range: $e');
       return [];
     }
   }
 
-  // Get unread announcements
+  // ============================================================================
+  // STATISTICS
+  // ============================================================================
+
+  Future<int> getUnreadCount(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      int unreadCount = 0;
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final readBy = List<String>.from(data['readBy'] ?? []);
+        if (!readBy.contains(userId)) {
+          unreadCount++;
+        }
+      }
+
+      return unreadCount;
+    } catch (e) {
+      print('❌ Error getting unread count: $e');
+      return 0;
+    }
+  }
+
   Future<List<AnnouncementModel>> getUnreadAnnouncements({
     required String userId,
     String? userRole,
@@ -278,19 +349,32 @@ class AnnouncementRepository {
           .where((announcement) => !announcement.isReadBy(userId))
           .toList();
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error fetching unread announcements: $e');
       return [];
     }
   }
 
-  // Check if user has unread announcements
   Future<bool> hasUnreadAnnouncements(String userId) async {
     try {
       final count = await getUnreadCount(userId);
       return count > 0;
     } catch (e) {
-      print('Repository Error: ${e.toString()}');
+      print('❌ Error checking unread announcements: $e');
       return false;
     }
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  Future<List<AnnouncementModel>> getAcademicAnnouncements({
+    String? userId,
+    String? userRole,
+  }) async {
+    return await getAnnouncementsByType(
+      type: 'academic',
+      userRole: userRole,
+    );
   }
 }

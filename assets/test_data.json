@@ -10,7 +10,7 @@
     "students_per_section": 30
   },
   "teachers": [
-    {"teacher_id": "T001", "name": "Priya Sharma", "email": "priya.sharma@school.com", "phone": "‪+91-9876543210‬", "subject": "English", "classes_assigned": ["Pre-KG-A", "Pre-KG-B"], "date_of_birth": "1985-03-15", "gender": "Female", "address": "12/45, Medavakkam Main Road, Keelkattalai, Chennai 600117", "qualification": "B.Ed, M.A. English", "joining_date": "2015-06-01"},
+    {"teacher_id": "T001", "name": "Priya Sharma", "email": "priya@school.com", "phone": "‪+91-9876543210‬", "subject": "English", "classes_assigned": ["Pre-KG-A", "Pre-KG-B"], "date_of_birth": "1985-03-15", "gender": "Female", "address": "12/45, Medavakkam Main Road, Keelkattalai, Chennai 600117", "qualification": "B.Ed, M.A. English", "joining_date": "2015-06-01"},
     {"teacher_id": "T002", "name": "Rajesh Kumar", "email": "rajesh.kumar@school.com", "phone": "‪+91-9876543211‬", "subject": "Mathematics", "classes_assigned": ["LKG-A", "LKG-B"], "date_of_birth": "1982-07-22", "gender": "Male", "address": "23/67, GST Road, Keelkattalai, Chennai 600117", "qualification": "B.Ed, M.Sc. Mathematics", "joining_date": "2014-04-15"},
     {"teacher_id": "T003", "name": "Sneha Patel", "email": "sneha.patel@school.com", "phone": "‪+91-9876543212‬", "subject": "Science", "classes_assigned": ["UKG-A", "UKG-B"], "date_of_birth": "1988-11-10", "gender": "Female", "address": "34/89, Keelkattalai Main Road, Chennai 600117", "qualification": "B.Ed, M.Sc. Biology", "joining_date": "2016-07-01"},
     {"teacher_id": "T004", "name": "Amit Verma", "email": "amit.verma@school.com", "phone": "‪+91-9876543213‬", "subject": "Social Studies", "classes_assigned": ["1st-A", "1st-B"], "date_of_birth": "1980-05-18", "gender": "Male", "address": "45/12, Velachery Main Road, Keelkattalai, Chennai 600117", "qualification": "B.Ed, M.A. History", "joining_date": "2013-08-20"},
@@ -71,7 +71,8 @@
     {"student_id": "S027", "name": "Zara Khan", "class": "Pre-KG", "section": "A", "roll_number": 27, "email": "zara.khan@student.school.com", "date_of_birth": "2021-03-08", "gender": "Female", "blood_group": "A+", "address": "27/324, Keelkattalai Lake Road, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Imran Khan", "father_phone": "+91-9123456053", "father_email": "imran.khan@parent.com", "father_occupation": "Exporter", "mother_name": "Zoya Khan", "mother_phone": "+91-9123456054", "mother_email": "zoya.khan@parent.com", "mother_occupation": "Fashion Blogger"}},
     {"student_id": "S028", "name": "Atharv Mishra", "class": "Pre-KG", "section": "A", "roll_number": 28, "email": "atharv.mishra@student.school.com", "date_of_birth": "2021-04-19", "gender": "Male", "blood_group": "AB+", "address": "28/336, Pallikaranai Road, Keelkattalai, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Harish Mishra", "father_phone": "+91-9123456055", "father_email": "harish.mishra@parent.com", "father_occupation": "Banker", "mother_name": "Vaishali Mishra", "mother_phone": "+91-9123456056", "mother_email": "vaishali.mishra@parent.com", "mother_occupation": "Librarian"}},
     {"student_id": "S029", "name": "Pihu Dutta", "class": "Pre-KG", "section": "A", "roll_number": 29, "email": "pihu.dutta@student.school.com", "date_of_birth": "2021-05-03", "gender": "Female", "blood_group": "O+", "address": "29/348, Karapakkam Road, Keelkattalai, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Soumya Dutta", "father_phone": "+91-9123456057", "father_email": "soumya.dutta@parent.com", "father_occupation": "Software Developer", "mother_name": "Ritika Dutta", "mother_phone": "+91-9123456058", "mother_email": "ritika.dutta@parent.com", "mother_occupation": "Content Writer"}},
-    {"student_id": "S030", "name": "Kian Mehta", "class": "Pre-KG", "section": "A", "roll_number": 30, "email": "kian.mehta@student.school.com", "date_of_birth": "2021-06-14", "gender": "Male", "blood_group": "B+", "address": "30/360, Kovilambakkam Road, Keelkattalai, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Karan Mehta", "father_phone": "+91-9123456059", "father_email": "karan.mehta@parent.com", "father_occupation": "Real Estate Developer", "mother_name": "Natasha Mehta", "mother_phone": "+91-9123456060", "mother_email": "natasha.mehta@parent.com", "mother_occupation": "Dance Teacher"}}
+    {"student_id": "S030", "name": "Kian Mehta", "class": "Pre-KG", "section": "A", "roll_number": 30, "email": "kian.mehta@student.school.com", "date_of_birth": "2021-06-14", "gender": "Male", "blood_group": "B+", "address": "30/360, Kovilambakkam Road, Keelkattalai, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Karan Mehta", "father_phone": "+91-9123456059", "father_email": "karan.mehta@parent.com", "father_occupation": "Real Estate Developer", "mother_name": "Natasha Mehta", "mother_phone": "+91-9123456060", "mother_email": "natasha.mehta@parent.com", "mother_occupation": "Dance Teacher"}},
+    {"student_id": "S031", "name": "student", "class": "Pre-KG", "section": "A", "roll_number": 30, "email": "student@school.com", "date_of_birth": "2021-06-14", "gender": "Male", "blood_group": "B+", "address": "30/360, Kovilambakkam Road, Keelkattalai, Chennai 600117", "admission_date": "2024-04-01", "parent_details": {"father_name": "Karan Mehta", "father_phone": "+91-9123456059", "father_email": "karan.mehta@parent.com", "father_occupation": "Real Estate Developer", "mother_name": "Natasha Mehta", "mother_phone": "+91-9123456060", "mother_email": "mother@school.com", "mother_occupation": "Dance Teacher"}}
   ],
   "sample_attendance_records": [
     {"attendance_id": "ATT001", "student_id": "S001", "class": "Pre-KG", "section": "A", "date": "2024-11-01", "status": "Present", "marked_by": "T001", "remarks": ""},
@@ -92,5 +93,29 @@
     "qualification": "Ph.D. Education, M.Ed",
     "joining_date": "2010-01-01"
   },
+  "student": {
+    "student_id": "STD001",
+    "name": "Dev Thanu",
+    "class": "3rd",
+    "section": "A",
+    "roll_number": 1,
+    "email": "student@school.com",
+    "date_of_birth": "2015-05-20",
+    "gender": "Male",
+    "blood_group": "O+",
+    "address": "School Campus, Keelkattalai, Chennai 600117",
+    "admission_date": "2020-04-01",
+    "parent_details": {
+      "father_name": "Parent Thanu",
+      "father_phone": "+91-9876500002",
+      "father_email": "parent@school.com",
+      "father_occupation": "Engineer",
+      "mother_name": "Mother Thanu",
+      "mother_phone": "+91-9876500003",
+      "mother_email": "mother.thanu@parent.com",
+      "mother_occupation": "Teacher"
+    }
+  },
+
   "note": "This dataset shows 30 students for Pre-KG Section A only. Complete dataset structure provided for all 780 students (30 students × 2 sections × 13 classes from Pre-KG to 10th). All addresses are in Keelkattalai, Chennai 600117 area. You can generate remaining students following the same pattern for Pre-KG Section B, LKG A & B, UKG A & B, and 1st through 10th standards A & B sections."
 }

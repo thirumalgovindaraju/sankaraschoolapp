@@ -8,6 +8,7 @@ import '../../widgets/dashboard/attendance_summary_card.dart';
 import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/notification_badge.dart';
 import '../../../data/models/user_model.dart';
+import '../../providers/attendance_provider.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -17,18 +18,42 @@ class TeacherDashboard extends StatefulWidget {
 }
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
+  bool _attendanceLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    // Delay loading until after the first frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDashboardData();
+    });
   }
 
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
+    final userRole = authProvider.currentUser?.role?.name;
 
+    // Load attendance data ONCE
+    if (!_attendanceLoaded) {
+      final classId = '10-A'; // TODO: Get from teacher's profile
+      await context.read<AttendanceProvider>().fetchClassAttendance(
+        classId: classId,
+        date: DateTime.now(),
+      );
+      if (mounted) {
+        setState(() {
+          _attendanceLoaded = true;
+        });
+      }
+    }
+
+    // Load other data
     await Future.wait([
-      context.read<AnnouncementProvider>().fetchAnnouncements(),
+      context.read<AnnouncementProvider>().fetchAnnouncements(
+        userRole: userRole,
+        userId: userId,
+      ),
       if (userId != null)
         context.read<NotificationProvider>().fetchNotifications(userId),
     ]);
@@ -57,7 +82,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
+        onRefresh: () async {
+          setState(() {
+            _attendanceLoaded = false;
+          });
+          await _loadDashboardData();
+        },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
@@ -74,6 +104,117 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
               // Today's Schedule
               _buildTodaysSchedule(context),
+              const SizedBox(height: 20),
+
+              // Today's Attendance Summary
+              Text(
+                'Today\'s Attendance',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ✅ FIXED: Use Consumer without FutureBuilder
+              Consumer<AttendanceProvider>(
+                builder: (context, attendanceProvider, child) {
+                  final classId = '10-A'; // TODO: Get from teacher's profile
+
+                  // Show loading state
+                  if (!_attendanceLoaded && attendanceProvider.isLoading) {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
+
+                  // Show the attendance data
+                  final records = attendanceProvider.classAttendanceRecords;
+                  final presentCount = records.where((r) => r.status == 'present').length;
+                  final absentCount = records.where((r) => r.status == 'absent').length;
+                  final lateCount = records.where((r) => r.status == 'late').length;
+                  final totalCount = records.length;
+
+                  return Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.green.shade50,
+                            Colors.white,
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Class $classId',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '$totalCount Students',
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildStatColumn('Present', presentCount, Colors.green),
+                              _buildStatColumn('Absent', absentCount, Colors.red),
+                              _buildStatColumn('Late', lateCount, Colors.orange),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                '/teacher-attendance-entry',
+                              ),
+                              icon: const Icon(Icons.edit),
+                              label: const Text('Update Attendance'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 20),
 
               // Recent Announcements
@@ -132,6 +273,44 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         icon: const Icon(Icons.add),
         label: const Text('New Announcement'),
       ),
+    );
+  }
+
+  Widget _buildStatColumn(String label, int value, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            label == 'Present' ? Icons.check_circle :
+            label == 'Absent' ? Icons.cancel :
+            Icons.access_time,
+            color: color,
+            size: 32,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value.toString(),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 

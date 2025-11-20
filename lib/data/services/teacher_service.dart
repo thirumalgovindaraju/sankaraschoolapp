@@ -1,78 +1,92 @@
-// lib/data/services/teacher_service.dart
+// lib/data/services/teacher_service.dart (COMPLETE FIXED VERSION)
 
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TeacherService {
-  static const String _teachersKey = 'teachers_data';
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _collection = 'teachers';
 
-  // Load all teachers from local storage
+  // Get all teachers
   Future<List<Map<String, dynamic>>> getAllTeachers() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final teachersJson = prefs.getString(_teachersKey);
+      final snapshot = await _firestore
+          .collection(_collection)
+          .orderBy('created_at', descending: true)
+          .get();
 
-      if (teachersJson != null) {
-        final List<dynamic> teachersList = json.decode(teachersJson);
-        return teachersList.cast<Map<String, dynamic>>();
+      print('✅ Fetched ${snapshot.docs.length} teachers from Firestore');
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id; // Add document ID
+        return data;
+      }).toList();
+    } catch (e) {
+      print('❌ Error getting teachers: $e');
+      return [];
+    }
+  }
+
+  // Add new teacher
+  Future<bool> addTeacher(Map<String, dynamic> teacherData) async {
+    try {
+      teacherData['created_at'] = FieldValue.serverTimestamp();
+      teacherData['updated_at'] = FieldValue.serverTimestamp();
+
+      await _firestore.collection(_collection).add(teacherData);
+      print('✅ Teacher added to Firestore: ${teacherData['name']}');
+      return true;
+    } catch (e) {
+      print('❌ Error adding teacher to Firestore: $e');
+      return false;
+    }
+  }
+
+  // Update teacher
+  Future<bool> updateTeacher(String teacherId, Map<String, dynamic> teacherData) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(_collection)
+          .where('teacher_id', isEqualTo: teacherId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('❌ Teacher not found: $teacherId');
+        return false;
       }
 
-      return [];
-    } catch (e) {
-      print('Error loading teachers: $e');
-      return [];
-    }
-  }
+      final docId = querySnapshot.docs.first.id;
+      teacherData['updated_at'] = FieldValue.serverTimestamp();
 
-  // Save all teachers to local storage
-  Future<bool> saveAllTeachers(List<Map<String, dynamic>> teachers) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final teachersJson = json.encode(teachers);
-      return await prefs.setString(_teachersKey, teachersJson);
+      await _firestore.collection(_collection).doc(docId).update(teacherData);
+      print('✅ Teacher updated in Firestore: ${teacherData['name']}');
+      return true;
     } catch (e) {
-      print('Error saving teachers: $e');
+      print('❌ Error updating teacher in Firestore: $e');
       return false;
     }
   }
 
-  // Add a new teacher
-  Future<bool> addTeacher(Map<String, dynamic> teacher) async {
-    try {
-      final teachers = await getAllTeachers();
-      teachers.add(teacher);
-      return await saveAllTeachers(teachers);
-    } catch (e) {
-      print('Error adding teacher: $e');
-      return false;
-    }
-  }
-
-  // Update existing teacher
-  Future<bool> updateTeacher(String teacherId, Map<String, dynamic> updatedTeacher) async {
-    try {
-      final teachers = await getAllTeachers();
-      final index = teachers.indexWhere((t) => t['teacher_id'] == teacherId);
-
-      if (index != -1) {
-        teachers[index] = updatedTeacher;
-        return await saveAllTeachers(teachers);
-      }
-      return false;
-    } catch (e) {
-      print('Error updating teacher: $e');
-      return false;
-    }
-  }
-
-  // Delete a teacher
+  // Delete teacher
   Future<bool> deleteTeacher(String teacherId) async {
     try {
-      final teachers = await getAllTeachers();
-      teachers.removeWhere((t) => t['teacher_id'] == teacherId);
-      return await saveAllTeachers(teachers);
+      final querySnapshot = await _firestore
+          .collection(_collection)
+          .where('teacher_id', isEqualTo: teacherId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('❌ Teacher not found for deletion: $teacherId');
+        return false;
+      }
+
+      await querySnapshot.docs.first.reference.delete();
+      print('✅ Teacher deleted from Firestore: $teacherId');
+      return true;
     } catch (e) {
-      print('Error deleting teacher: $e');
+      print('❌ Error deleting teacher from Firestore: $e');
       return false;
     }
   }
@@ -80,13 +94,21 @@ class TeacherService {
   // Get teacher by ID
   Future<Map<String, dynamic>?> getTeacherById(String teacherId) async {
     try {
-      final teachers = await getAllTeachers();
-      return teachers.firstWhere(
-            (t) => t['teacher_id'] == teacherId,
-        orElse: () => {},
-      );
+      final querySnapshot = await _firestore
+          .collection(_collection)
+          .where('teacher_id', isEqualTo: teacherId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        return null;
+      }
+
+      final data = querySnapshot.docs.first.data();
+      data['id'] = querySnapshot.docs.first.id;
+      return data;
     } catch (e) {
-      print('Error getting teacher: $e');
+      print('❌ Error getting teacher by ID: $e');
       return null;
     }
   }
@@ -94,53 +116,69 @@ class TeacherService {
   // Get teachers by subject
   Future<List<Map<String, dynamic>>> getTeachersBySubject(String subject) async {
     try {
-      final teachers = await getAllTeachers();
-      return teachers.where((t) => t['subject'] == subject).toList();
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('subject', isEqualTo: subject)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
     } catch (e) {
-      print('Error filtering teachers: $e');
+      print('❌ Error filtering teachers by subject: $e');
       return [];
     }
   }
 
-  // Search teachers by name
+  // Search teachers
   Future<List<Map<String, dynamic>>> searchTeachers(String query) async {
     try {
       final teachers = await getAllTeachers();
       return teachers.where((t) =>
-      t['name'].toString().toLowerCase().contains(query.toLowerCase()) ||
-          t['teacher_id'].toString().toLowerCase().contains(query.toLowerCase())
+      (t['name'] as String).toLowerCase().contains(query.toLowerCase()) ||
+          (t['teacher_id'] as String).toLowerCase().contains(query.toLowerCase())
       ).toList();
     } catch (e) {
-      print('Error searching teachers: $e');
+      print('❌ Error searching teachers: $e');
       return [];
     }
   }
 
-  // Get teachers count by subject
+  // Get teacher count by subject
   Future<Map<String, int>> getTeacherCountBySubject() async {
     try {
       final teachers = await getAllTeachers();
-      final Map<String, int> subjectCount = {};
+      final subjectCount = <String, int>{};
 
       for (var teacher in teachers) {
-        final subject = teacher['subject'] as String;
+        final subject = teacher['subject'] as String? ?? 'Unknown';
         subjectCount[subject] = (subjectCount[subject] ?? 0) + 1;
       }
 
       return subjectCount;
     } catch (e) {
-      print('Error getting teacher count by subject: $e');
+      print('❌ Error getting teacher count by subject: $e');
       return {};
     }
   }
 
-  // Clear all teachers
+  // Clear all teachers (use with caution!)
   Future<bool> clearAllTeachers() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return await prefs.remove(_teachersKey);
+      final snapshot = await _firestore.collection(_collection).get();
+      final batch = _firestore.batch();
+
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+      print('✅ All teachers cleared from Firestore');
+      return true;
     } catch (e) {
-      print('Error clearing teachers: $e');
+      print('❌ Error clearing teachers: $e');
       return false;
     }
   }

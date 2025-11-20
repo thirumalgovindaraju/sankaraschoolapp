@@ -11,7 +11,7 @@ import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/notification_badge.dart';
 import '../../../data/models/user_model.dart';
 import '../../../core/constants/app_colors.dart';
-
+import '../../providers/attendance_provider.dart';
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({Key? key}) : super(key: key);
 
@@ -23,15 +23,36 @@ class _StudentDashboardState extends State<StudentDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    // Delay loading until after the first frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDashboardData();
+    });
   }
-
+/*
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
 
     await Future.wait([
       context.read<AnnouncementProvider>().fetchAnnouncements(),
+      if (userId != null)
+        context.read<NotificationProvider>().fetchNotifications(userId),
+      if (userId != null)
+        context.read<AcademicProvider>().fetchAttendanceSummary(userId),
+    ]);
+  }
+*/
+  Future<void> _loadDashboardData() async {
+    final authProvider = context.read<AuthProvider>();
+    final userId = authProvider.currentUser?.id;
+    final userRole = authProvider.currentUser?.role?.name; // Get role
+
+    await Future.wait([
+      // ✅ Pass both userRole and userId to filter announcements
+      context.read<AnnouncementProvider>().fetchAnnouncements(
+        userRole: userRole,
+        userId: userId,
+      ),
       if (userId != null)
         context.read<NotificationProvider>().fetchNotifications(userId),
       if (userId != null)
@@ -78,6 +99,59 @@ class _StudentDashboardState extends State<StudentDashboard> {
               // Quick Actions
               _buildQuickActions(context),
               const SizedBox(height: 20),
+              // My Attendance Section
+              Text(
+                'My Attendance',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+            Consumer2<AuthProvider, AttendanceProvider>(
+                builder: (context, authProvider, attendanceProvider, child) {
+                  final userId = authProvider.currentUser?.id;
+
+                  if (userId == null) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return FutureBuilder(
+                      future: attendanceProvider.fetchAttendanceSummary(
+                        studentId: userId,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(24.0),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          );
+                        }
+                        final summary = attendanceProvider.attendanceSummary;
+
+                        if (summary == null) {
+                          return const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text('No attendance data available'),
+                            ),
+                          );
+                        }
+
+                        return AttendanceSummaryCard(
+                          attendancePercentage: summary.attendancePercentage,
+                          presentDays: summary.presentDays,
+                          totalDays: summary.totalDays,
+                          absentDays: summary.absentDays,
+                          isLoading: false,
+                          summary: summary,
+                          onTap: () => Navigator.pushNamed(context, '/attendance'),
+                        );
+                      },
+                  );
+                },
+            ),
 
               // Attendance Summary
               if (attendanceSummary != null) ...[

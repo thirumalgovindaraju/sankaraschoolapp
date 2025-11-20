@@ -12,7 +12,8 @@ import '../../providers/teacher_provider.dart';
 import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/notification_badge.dart';
 import '../../widgets/common/custom_drawer.dart';
-
+import '../../widgets/dashboard/realtime_attendance_widget.dart';
+import '../../providers/attendance_provider.dart';
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
 
@@ -53,7 +54,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
-    final userRole = authProvider.currentUser?.role?.name; // ✅ Convert enum to string
+    final userRole = authProvider.currentUser?.role?.name;
 
     await Future.wait([
       context.read<DashboardProvider>().refreshDashboard(),
@@ -109,7 +110,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.dashboard, color: Colors.white, size: 24),
@@ -150,7 +151,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             builder: (context) => Container(
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: IconButton(
@@ -206,7 +207,130 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                       // Key Performance Indicators
                       _buildKeyStatistics(context, stats, dashboardProvider, studentProvider, teacherProvider),
                       const SizedBox(height: 24),
+                      // Real-time Attendance Overview
+                      Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.people_alt,
+                                      color: Colors.blue,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Today\'s School Attendance',
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Consumer<AttendanceProvider>(
+                                builder: (context, attendanceProvider, child) {
+                                  return FutureBuilder<Map<String, dynamic>>(
+                                    future: attendanceProvider.getAttendanceStatistics(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState == ConnectionState.waiting) {
+                                        return const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(20.0),
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      }
 
+                                      if (!snapshot.hasData) {
+                                        return const Center(
+                                          child: Text('No attendance data available'),
+                                        );
+                                      }
+
+                                      final stats = snapshot.data!;
+                                      final totalStudents = stats['total_students'] ?? 0;
+                                      final presentToday = stats['present_today'] ?? 0;
+                                      final absentToday = stats['absent_today'] ?? 0;
+                                      final lateToday = stats['late_today'] ?? 0;
+                                      final avgAttendance = stats['average_attendance'] ?? 0.0;
+
+                                      return Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                            children: [
+                                              _buildStat(
+                                                'Present',
+                                                presentToday.toString(),
+                                                Icons.check_circle,
+                                                Colors.green,
+                                              ),
+                                              _buildStat(
+                                                'Absent',
+                                                absentToday.toString(),
+                                                Icons.cancel,
+                                                Colors.red,
+                                              ),
+                                              _buildStat(
+                                                'Late',
+                                                lateToday.toString(),
+                                                Icons.access_time,
+                                                Colors.orange,
+                                              ),
+                                              _buildStat(
+                                                'Total',
+                                                totalStudents.toString(),
+                                                Icons.people,
+                                                Colors.blue,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.trending_up, color: Colors.blue),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'Average Attendance: ${avgAttendance.toStringAsFixed(1)}%',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                    color: Colors.blue,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       // Quick Actions Grid
                       _buildQuickActions(context),
                       const SizedBox(height: 24),
@@ -291,7 +415,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -305,7 +429,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(greetingIcon, color: Colors.white, size: 28),
@@ -318,7 +442,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     Text(
                       greeting,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -342,10 +466,10 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
@@ -365,7 +489,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Text(
                   '${now.day}/${now.month}/${now.year}',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -393,7 +517,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -485,7 +609,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
     return Card(
       elevation: 4,
-      shadowColor: color.withOpacity(0.3),
+      shadowColor: color.withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -508,7 +632,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
+                      color: Colors.white.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, color: Colors.white, size: 24),
@@ -516,7 +640,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
+                      color: Colors.white.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -558,7 +682,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     title,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -631,7 +755,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -688,7 +812,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }) {
     return Card(
       elevation: 3,
-      shadowColor: color.withOpacity(0.3),
+      shadowColor: color.withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -702,7 +826,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             gradient: LinearGradient(
               colors: [
                 Colors.white,
-                color.withOpacity(0.05),
+                color.withValues(alpha: 0.05),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -715,12 +839,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color.withOpacity(0.8), color],
+                    colors: [color.withValues(alpha: 0.8), color],
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.3),
+                      color: color.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -756,7 +880,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -804,7 +928,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.people, color: Colors.blue, size: 24),
@@ -891,7 +1015,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: Colors.green.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.school, color: Colors.green, size: 24),
@@ -968,12 +1092,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [color.withOpacity(0.8), color],
+              colors: [color.withValues(alpha: 0.8), color],
             ),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.3),
+                color: color.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -1046,7 +1170,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
+                        color: Colors.blue.withValues(alpha: 0.3),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -1084,7 +1208,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                             borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.blue.withOpacity(0.3),
+                                color: Colors.blue.withValues(alpha: 0.3),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -1099,7 +1223,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -1169,12 +1293,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [color.withOpacity(0.8), color],
+                      colors: [color.withValues(alpha: 0.8), color],
                     ),
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(0.3),
+                        color: color.withValues(alpha: 0.3),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -1209,12 +1333,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                           height: 12,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [color.withOpacity(0.8), color],
+                              colors: [color.withValues(alpha: 0.8), color],
                             ),
                             borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: color.withOpacity(0.3),
+                                color: color.withValues(alpha: 0.3),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -1229,7 +1353,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -1260,7 +1384,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           gradient: LinearGradient(
             colors: [
               Colors.white,
-              Colors.orange.shade50.withOpacity(0.3),
+              Colors.orange.shade50.withValues(alpha: 0.3),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1274,7 +1398,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -1382,8 +1506,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                         show: true,
                         gradient: LinearGradient(
                           colors: [
-                            Colors.orange.withOpacity(0.3),
-                            Colors.orange.withOpacity(0.05),
+                            Colors.orange.withValues(alpha: 0.3),
+                            Colors.orange.withValues(alpha: 0.05),
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -1413,7 +1537,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           gradient: LinearGradient(
             colors: [
               Colors.white,
-              Colors.green.shade50.withOpacity(0.3),
+              Colors.green.shade50.withValues(alpha: 0.3),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1427,7 +1551,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -1567,7 +1691,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.1),
+                            color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
@@ -1666,7 +1790,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
+                    color: Colors.purple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -1701,12 +1825,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [color.withOpacity(0.8), color],
+                        colors: [color.withValues(alpha: 0.8), color],
                       ),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: color.withOpacity(0.3),
+                          color: color.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -1734,7 +1858,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(

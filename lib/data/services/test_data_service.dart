@@ -24,6 +24,7 @@ class TestDataService {
   bool _registrationInitialized = false;
 
   // Load test data from JSON file
+  /*
   Future<void> loadTestData() async {
     if (_isLoaded) return;
 
@@ -41,7 +42,40 @@ class TestDataService {
     // NEW: Load registered users
     await _loadRegisteredUsers();
   }
+  */
 
+  Future<void> loadTestData() async {
+    if (_isLoaded) return;
+
+    try {
+      final String jsonString = await rootBundle.loadString('assets/test_data.json');
+      _testData = json.decode(jsonString);
+      _isLoaded = true;
+      print('✅ Test data loaded successfully from JSON');
+
+      // DEBUG: Print student emails
+      final students = getStudents();
+      print('📧 Student emails in test data:');
+      for (var s in students) {
+        print('  - ${s['email']}');
+      }
+    } catch (e) {
+      print('❌ Error loading test data: $e');
+      print('⚠️ Using fallback data');
+      _testData = _getFallbackData();
+      _isLoaded = true;
+
+      // DEBUG: Print student emails from fallback
+      final students = getStudents();
+      print('📧 Student emails in fallback data:');
+      for (var s in students) {
+        print('  - ${s['email']}');
+      }
+    }
+
+    // NEW: Load registered users
+    await _loadRegisteredUsers();
+  }
   // ============================================================================
   // NEW: REGISTRATION FUNCTIONALITY
   // ============================================================================

@@ -1,4 +1,5 @@
 // lib/core/routes/route_generator.dart
+// ✅ FIXED VERSION - Replace your entire route_generator.dart with this
 
 import 'package:flutter/material.dart';
 import '../../presentation/screens/auth/login_screen.dart';
@@ -32,7 +33,6 @@ import '../../presentation/screens/announcements/announcement_detail_screen.dart
 import '../../presentation/screens/announcements/edit_announcement_screen.dart';
 import '../../data/models/announcement_model.dart';
 import '../../presentation/screens/academic/teacher_attendance_entry_screen.dart';
-
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -115,22 +115,28 @@ class RouteGenerator {
           builder: (_) => const AddTeacherScreen(),
         );
 
+    // ✅ FIXED: Edit teacher route - no longer needed since we use direct navigation
+    // But keeping it here in case someone uses named routes
       case '/edit-teacher':
-        if (args != null && args is Map<String, dynamic>) {
+        if (settings.arguments != null && settings.arguments is Map<String, dynamic>) {
           return MaterialPageRoute(
-            builder: (_) => AddTeacherScreen(teacherData: args),
+            builder: (_) => AddTeacherScreen(
+              teacherData: settings.arguments as Map<String, dynamic>,
+            ),
           );
         }
-        return _errorRoute('Teacher data required for editing');
+        return _errorRoute('Teacher data required for editing'); // ✅ FIXED: Added message parameter
 
       case '/manage-users':
         return MaterialPageRoute(
           builder: (_) => const ManageUsersScreen(),
         );
+
       case '/teacher-attendance-entry':
         return MaterialPageRoute(
           builder: (_) => const TeacherAttendanceEntryScreen(),
         );
+
     // ============= ANNOUNCEMENT ROUTES =============
       case '/create-announcement':
         return MaterialPageRoute(
@@ -140,7 +146,7 @@ class RouteGenerator {
 
       case '/announcements':
         return MaterialPageRoute(
-          builder: (_) => const CreateAnnouncementScreen(),
+          builder: (_) => const AnnouncementsListScreen(),
           settings: settings,
         );
 
@@ -201,18 +207,7 @@ class RouteGenerator {
         }
         return MaterialPageRoute(builder: (_) => const GradesScreen());
 
-
-    // ============= Announcements =============
-      case '/create-announcement':
-        return MaterialPageRoute(
-          builder: (_) => const CreateAnnouncementScreen(),
-        );
-
-      case '/announcements':
-        return MaterialPageRoute(
-          builder: (_) => const AnnouncementsListScreen(),
-        );
-
+    // ============= ANNOUNCEMENT DETAIL ROUTES =============
       case '/announcement-detail':
         final announcement = settings.arguments as AnnouncementModel;
         return MaterialPageRoute(
@@ -224,6 +219,7 @@ class RouteGenerator {
         return MaterialPageRoute(
           builder: (_) => EditAnnouncementScreen(announcement: announcement),
         );
+
     // ============= OTHER ROUTES =============
       case '/profile':
         return MaterialPageRoute(builder: (_) => const ProfileScreen());

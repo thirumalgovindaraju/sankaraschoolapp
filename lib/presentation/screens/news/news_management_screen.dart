@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/announcement_provider.dart';
 import '../../../data/models/announcement_model.dart';
+import '../../providers/auth_provider.dart';
 
 class NewsManagementScreen extends StatefulWidget {
   const NewsManagementScreen({Key? key}) : super(key: key);
@@ -40,9 +41,14 @@ class _NewsManagementScreenState extends State<NewsManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _publishDate = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AnnouncementProvider>().fetchAnnouncements();
+      final authProvider = context.read<AuthProvider>();
+      final userRole = authProvider.currentUser?.role?.name;
+
+      context.read<AnnouncementProvider>().fetchAnnouncements(
+        userRole: userRole ?? 'admin', // Add this parameter
+        userId: authProvider.currentUser?.id,
+      );
     });
   }
 

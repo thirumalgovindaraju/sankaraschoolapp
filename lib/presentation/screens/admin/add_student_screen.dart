@@ -1,12 +1,10 @@
-// lib/presentation/screens/admin/add_student_screen.dart (UPDATED)
+// lib/presentation/screens/admin/add_student_screen.dart (COMPLETELY FIXED)
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/dashboard_provider.dart';
 import '../../../data/models/student_model.dart';
 import '../../../data/services/activity_service.dart';
-
 
 class AddStudentScreen extends StatefulWidget {
   final Map<String, dynamic>? studentData;
@@ -22,7 +20,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _dobController = TextEditingController();
-  final _bloodGroupController = TextEditingController();
   final _rollNumberController = TextEditingController();
 
   // Parent Details
@@ -39,6 +36,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   String _selectedClass = 'Pre-KG';
   String _selectedSection = 'A';
   String _selectedGender = 'Male';
+  String _selectedBloodGroup = 'A+';
   bool _isLoading = false;
 
   final List<String> _classes = [
@@ -55,9 +53,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     if (widget.studentData != null) {
       _loadStudentData();
     }
-    if (_bloodGroupController.text.isEmpty) {
-      _bloodGroupController.text = 'A+';
-    }
   }
 
   void _loadStudentData() {
@@ -65,7 +60,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _nameController.text = data['name'] ?? '';
     _emailController.text = data['email'] ?? '';
     _dobController.text = data['date_of_birth'] ?? '';
-    _bloodGroupController.text = data['blood_group'] ?? 'A+';
+    _selectedBloodGroup = data['blood_group'] ?? 'A+';
     _rollNumberController.text = data['roll_number']?.toString() ?? '';
     _selectedClass = data['class'] ?? 'Pre-KG';
     _selectedSection = data['section'] ?? 'A';
@@ -88,7 +83,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _dobController.dispose();
-    _bloodGroupController.dispose();
     _rollNumberController.dispose();
     _fatherNameController.dispose();
     _fatherPhoneController.dispose();
@@ -120,164 +114,14 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     final now = DateTime.now();
     return 'STU${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.millisecond.toString().padLeft(3, '0')}';
   }
-/*
+
   Future<void> _saveStudent() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final studentProvider = context.read<StudentProvider>();
-      final activityService = ActivityService(); // 🔥 NEW
-
-      final parentDetails = ParentDetails(
-        fatherName: _fatherNameController.text.trim(),
-        fatherPhone: _fatherPhoneController.text.trim(),
-        fatherEmail: _fatherEmailController.text.trim(),
-        fatherOccupation: _fatherOccupationController.text.trim(),
-        motherName: _motherNameController.text.trim(),
-        motherPhone: _motherPhoneController.text.trim(),
-        motherEmail: _motherEmailController.text.trim(),
-        motherOccupation: _motherOccupationController.text.trim(),
-      );
-
-      bool success = await studentProvider.addStudent(newStudent);
-      // 🔥 ADD THIS BLOCK
-      if (success && widget.studentData == null) {  // Only for new students
-        await activityService.logStudentAdmission(
-          _nameController.text.trim(),
-          '$_selectedClass-$_selectedSection',
-        );
-
-        if (mounted) {
-          await context.read<DashboardProvider>().refreshDashboard();
-        }
-      }
-
-      final studentName = _nameController.text.trim();
-      final className = '$_selectedClass-$_selectedSection';
-
-      if (widget.studentData != null) {
-        // UPDATE existing student
-        final updatedStudent = StudentModel(
-          studentId: widget.studentData!['student_id'],
-          name: studentName,
-          email: _emailController.text.trim(),
-          className: _selectedClass,
-          section: _selectedSection,
-          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
-          dateOfBirth: _dobController.text.trim(),
-          bloodGroup: _bloodGroupController.text.trim(),
-          gender: _selectedGender,
-          address: _addressController.text.trim(),
-          admissionDate: widget.studentData!['admission_date'] ?? DateTime.now().toIso8601String().split('T')[0],
-          parentDetails: parentDetails,
-        );
-
-        success = await studentProvider.updateStudent(updatedStudent);
-      } else {
-        // ADD new student
-        final newStudent = StudentModel(
-          studentId: _generateStudentId(),
-          name: studentName,
-          email: _emailController.text.trim(),
-          className: _selectedClass,
-          section: _selectedSection,
-          rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
-          dateOfBirth: _dobController.text.trim(),
-          bloodGroup: _bloodGroupController.text.trim(),
-          gender: _selectedGender,
-          address: _addressController.text.trim(),
-          admissionDate: DateTime.now().toIso8601String().split('T')[0],
-          parentDetails: parentDetails,
-        );
-
-        success = await studentProvider.addStudent(newStudent);
-
-        // 🔥 NEW: Log activity for new student admission
-        if (success) {
-          await activityService.logStudentAdmission(studentName, className);
-        }
-      }
-
-      // 🔥 NEW: Refresh dashboard after success
-      if (success && mounted) {
-        await context.read<DashboardProvider>().refreshDashboard();
-      }
-
-      setState(() => _isLoading = false);
-
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                Text(widget.studentData != null
-                    ? 'Student updated successfully'
-                    : 'Student added successfully'),
-              ],
-            ),
-            backgroundColor: Colors.green[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-        Navigator.pop(context, true);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white),
-                const SizedBox(width: 12),
-                Text('Failed to ${widget.studentData != null ? 'update' : 'add'} student'),
-              ],
-            ),
-            backgroundColor: Colors.red[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Error: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-    }
-  }
-*/
-  Future<void> _saveStudent() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final studentProvider = context.read<StudentProvider>();
+      final studentProvider = Provider.of<StudentProvider>(context, listen: false);
       final activityService = ActivityService();
 
       final parentDetails = ParentDetails(
@@ -305,7 +149,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           section: _selectedSection,
           rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
           dateOfBirth: _dobController.text.trim(),
-          bloodGroup: _bloodGroupController.text.trim(),
+          bloodGroup: _selectedBloodGroup,
           gender: _selectedGender,
           address: _addressController.text.trim(),
           admissionDate: widget.studentData!['admission_date'] ?? DateTime.now().toIso8601String().split('T')[0],
@@ -323,7 +167,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           section: _selectedSection,
           rollNumber: int.tryParse(_rollNumberController.text.trim()) ?? 1,
           dateOfBirth: _dobController.text.trim(),
-          bloodGroup: _bloodGroupController.text.trim(),
+          bloodGroup: _selectedBloodGroup,
           gender: _selectedGender,
           address: _addressController.text.trim(),
           admissionDate: DateTime.now().toIso8601String().split('T')[0],
@@ -338,12 +182,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         }
       }
 
-      // Refresh dashboard after success
-      if (success && mounted) {
-        await context.read<DashboardProvider>().refreshDashboard();
-      }
+      // Refresh student provider data - already handled by addStudent/updateStudent
 
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -365,7 +208,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             margin: const EdgeInsets.all(16),
           ),
         );
-        Navigator.pop(context, true);
+        Navigator.of(context).pop(true);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -386,8 +229,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -408,6 +251,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.studentData != null;
@@ -425,7 +269,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Student Information Section
             _buildSectionHeader('Student Information', Icons.person_outline),
             const SizedBox(height: 16),
             _buildTextField(
@@ -508,17 +351,12 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
             ),
             const SizedBox(height: 16),
             _buildDropdown(
-              value: _bloodGroupController.text.isEmpty ? 'A+' : _bloodGroupController.text,
+              value: _selectedBloodGroup,
               label: 'Blood Group',
               items: _bloodGroups,
-              onChanged: (value) {
-                setState(() => _bloodGroupController.text = value!);
-              },
+              onChanged: (value) => setState(() => _selectedBloodGroup = value ?? 'A+'),
             ),
-
             const SizedBox(height: 32),
-
-            // Parent Information Section
             _buildSectionHeader('Father\'s Information', Icons.man),
             const SizedBox(height: 16),
             _buildTextField(
@@ -550,9 +388,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               label: 'Father\'s Occupation',
               icon: Icons.work,
             ),
-
             const SizedBox(height: 32),
-
             _buildSectionHeader('Mother\'s Information', Icons.woman),
             const SizedBox(height: 16),
             _buildTextField(
@@ -582,9 +418,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               label: 'Mother\'s Occupation',
               icon: Icons.work,
             ),
-
             const SizedBox(height: 32),
-
             _buildSectionHeader('Address', Icons.home),
             const SizedBox(height: 16),
             _buildTextField(
@@ -595,10 +429,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               validator: (value) =>
               value?.isEmpty ?? true ? 'Please enter address' : null,
             ),
-
             const SizedBox(height: 32),
-
-            // Save Button
             ElevatedButton(
               onPressed: _isLoading ? null : _saveStudent,
               style: ElevatedButton.styleFrom(

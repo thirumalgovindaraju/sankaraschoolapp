@@ -16,10 +16,10 @@ import 'presentation/providers/admin_provider.dart';
 import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/student_provider.dart';
 import 'presentation/providers/teacher_provider.dart';
+import 'presentation/providers/attendance_provider.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/services/data_initialization_service.dart';
-import '../../presentation/providers/attendance_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -31,9 +31,9 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('✅ Firebase initialized successfully');
+    debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    print('❌ Firebase initialization error: $e');
+    debugPrint('❌ Firebase initialization error: $e');
   }
 
   // ✅ DON'T AWAIT - Start initialization in background
@@ -46,21 +46,21 @@ void main() async {
 
 // Initialize data in the background without blocking the UI
 void _initializeDataInBackground() async {
-  print('🚀 Starting background data initialization...');
+  debugPrint('🚀 Starting background data initialization...');
 
   try {
     final initialized = await DataInitializationService.initializeAllData();
 
     if (initialized) {
       final status = await DataInitializationService.getInitializationStatus();
-      print('✅ Data initialization complete!');
-      print('📊 Students: ${status['student_count']}');
-      print('👨‍🏫 Teachers: ${status['teacher_count']}');
+      debugPrint('✅ Data initialization complete!');
+      debugPrint('📊 Students: ${status['student_count']}');
+      debugPrint('👨‍🏫 Teachers: ${status['teacher_count']}');
     } else {
-      print('⚠️ Data initialization failed, app may not work correctly');
+      debugPrint('⚠️ Data initialization failed, app may not work correctly');
     }
   } catch (e) {
-    print('❌ Error during data initialization: $e');
+    debugPrint('❌ Error during data initialization: $e');
   }
 }
 
@@ -96,7 +96,8 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (context) => AdminProvider()),
         ChangeNotifierProvider(create: (context) => StudentProvider()),
         ChangeNotifierProvider(create: (context) => TeacherProvider()),
-        // ⭐ ADD THIS NEW PROVIDER
+
+        // Attendance Provider
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
       ],
       child: MaterialApp(

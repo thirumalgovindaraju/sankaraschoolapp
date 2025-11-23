@@ -38,7 +38,7 @@ class _ParentDashboardState extends State<ParentDashboard> {
 
     await Future.wait([
       context.read<AnnouncementProvider>().fetchAnnouncements(
-        userRole: userRole,
+        userRole: userRole ?? 'parent', // Provide default value
         userId: userId,
       ),
       if (userId != null)

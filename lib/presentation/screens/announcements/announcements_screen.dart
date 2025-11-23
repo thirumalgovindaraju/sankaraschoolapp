@@ -41,7 +41,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen>
 
     final provider = context.read<AnnouncementProvider>();
     provider.fetchAnnouncements(
-      userRole: userRole,
+      userRole: userRole??'student',
       userId: userId,
     );
   }

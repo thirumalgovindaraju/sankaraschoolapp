@@ -20,12 +20,19 @@ class AnnouncementProvider extends ChangeNotifier {
 
   // Getters
   List<AnnouncementModel> get announcements => _announcements;
+
   List<AnnouncementModel> get urgentAnnouncements => _urgentAnnouncements;
+
   List<AnnouncementModel> get recentAnnouncements => _recentAnnouncements;
+
   int get unreadCount => _unreadCount;
+
   bool get isLoading => _isLoading;
+
   String? get error => _error;
+
   String? get selectedType => _selectedType;
+
   bool get showOnlyUnread => _showOnlyUnread;
 
   // Filtered announcements based on current filters
@@ -55,8 +62,13 @@ class AnnouncementProvider extends ChangeNotifier {
 
     return attachmentUrls.map((url) {
       return Attachment(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: url.split('/').last,
+        id: DateTime
+            .now()
+            .millisecondsSinceEpoch
+            .toString(),
+        name: url
+            .split('/')
+            .last,
         url: url,
       );
     }).toList();
@@ -65,6 +77,7 @@ class AnnouncementProvider extends ChangeNotifier {
   // FETCH METHODS
 
   // Fetch all announcements
+  /*
   Future<void> fetchAnnouncements({String? userRole, String? userId}) async {
     _isLoading = true;
     _error = null;
@@ -72,7 +85,7 @@ class AnnouncementProvider extends ChangeNotifier {
 
     try {
       _announcements = await _repository.getAnnouncements(
-        userRole: userRole,
+        userRole: userRole ?? '',
         userId: userId,
       );
       _error = null;
@@ -84,9 +97,44 @@ class AnnouncementProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+*/
+  // In your AnnouncementProvider class
+  // In announcement_provider.dart
+  // In announcement_provider.dart
+  Future<void> fetchAnnouncements({
+    required String userRole,
+    String? userId,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      print('📥 Fetching announcements for role: $userRole');
+
+      _announcements = await _repository.getAnnouncements(
+        userRole: userRole,
+        userId: userId,
+        activeOnly: true,
+        limit: 50,
+      );
+
+      print('✅ Fetched ${_announcements
+          .length} announcements for role: $userRole');
+      _error = null;
+    } catch (e) {
+      print('❌ Error fetching announcements: $e');
+      _error = e.toString();
+      _announcements = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   // Fetch recent announcements (for dashboard)
-  Future<void> fetchRecentAnnouncements({String? userRole, int limit = 5}) async {
+  Future<void> fetchRecentAnnouncements(
+      {String? userRole, int limit = 5}) async {
     try {
       _recentAnnouncements = await _repository.getRecentAnnouncements(
         userRole: userRole,
@@ -155,7 +203,10 @@ class AnnouncementProvider extends ChangeNotifier {
 
     try {
       final announcement = AnnouncementModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: DateTime
+            .now()
+            .millisecondsSinceEpoch
+            .toString(),
         title: title,
         message: message,
         type: type,
@@ -167,7 +218,8 @@ class AnnouncementProvider extends ChangeNotifier {
         createdByRole: createdByRole,
         createdAt: DateTime.now(),
         expiryDate: expiryDate,
-        attachments: _convertToAttachments(attachments), // FIXED: Convert to Attachment objects
+        attachments: _convertToAttachments(attachments),
+        // FIXED: Convert to Attachment objects
         readBy: [],
       );
 
@@ -224,7 +276,8 @@ class AnnouncementProvider extends ChangeNotifier {
         createdByRole: existing.createdByRole,
         createdAt: existing.createdAt,
         expiryDate: expiryDate,
-        attachments: _convertToAttachments(attachments), // FIXED: Convert to Attachment objects
+        attachments: _convertToAttachments(attachments),
+        // FIXED: Convert to Attachment objects
         readBy: existing.readBy,
       );
 
@@ -298,11 +351,9 @@ class AnnouncementProvider extends ChangeNotifier {
   }
 
   // Helper method to update read status in a list
-  void _updateReadStatusInList(
-      List<AnnouncementModel> list,
+  void _updateReadStatusInList(List<AnnouncementModel> list,
       String announcementId,
-      String userId,
-      ) {
+      String userId,) {
     final index = list.indexWhere((a) => a.id == announcementId);
     if (index != -1) {
       final announcement = list[index];
@@ -370,8 +421,7 @@ class AnnouncementProvider extends ChangeNotifier {
   }
 
   // Get announcements by date range
-  Future<void> fetchAnnouncementsByDateRange(
-      DateTime startDate,
+  Future<void> fetchAnnouncementsByDateRange(DateTime startDate,
       DateTime endDate, {
         String? userRole,
       }) async {
@@ -423,7 +473,9 @@ class AnnouncementProvider extends ChangeNotifier {
 
   // Get announcements count by type
   int getCountByType(String type) {
-    return _announcements.where((a) => a.type == type).length;
+    return _announcements
+        .where((a) => a.type == type)
+        .length;
   }
 
   // Get active announcements (not expired)
@@ -449,10 +501,13 @@ class AnnouncementProvider extends ChangeNotifier {
 
   // Refresh all data
   Future<void> refreshAll({String? userRole, String? userId}) async {
+    // Provide default userRole if null
+    final role = userRole ?? 'student';
+
     await Future.wait([
-      fetchAnnouncements(userRole: userRole, userId: userId),
-      fetchRecentAnnouncements(userRole: userRole),
-      fetchUrgentAnnouncements(userRole: userRole),
+      fetchAnnouncements(userRole: role, userId: userId),
+      fetchRecentAnnouncements(userRole: role),
+      fetchUrgentAnnouncements(userRole: role),
       if (userId != null) fetchUnreadCount(userId),
     ]);
   }

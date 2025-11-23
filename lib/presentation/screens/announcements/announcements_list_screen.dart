@@ -15,23 +15,27 @@ class AnnouncementsListScreen extends StatefulWidget {
 class _AnnouncementsListScreenState extends State<AnnouncementsListScreen> {
   String? _selectedFilter;
 
+
   @override
   void initState() {
     super.initState();
-    _loadAnnouncements();
+    // ✅ Schedule after build completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAnnouncements();
+    });
   }
-
   Future<void> _loadAnnouncements() async {
+    if (!mounted) return; // Safety check
+
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
     final userRole = authProvider.currentUser?.role?.name;
 
     await context.read<AnnouncementProvider>().fetchAnnouncements(
-      userRole: userRole,
+      userRole: userRole ?? 'student', // Provide default value
       userId: userId,
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final announcementProvider = context.watch<AnnouncementProvider>();

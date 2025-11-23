@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/teacher_provider.dart';
-
+import 'add_teacher_screen.dart';
 class ManageTeachersScreen extends StatefulWidget {
   const ManageTeachersScreen({Key? key}) : super(key: key);
 
@@ -336,6 +336,84 @@ class _ManageTeachersScreenState extends State<ManageTeachersScreen> {
         elevation: 4,
       ),
     );
+  }
+/*
+  void _editTeacher(Map<String, dynamic> teacher) async {
+    final result = await Navigator.pushNamed(
+      context,
+      '/edit-teacher',
+      arguments: teacher,
+    );
+
+    if (result == true && mounted) {
+      // ✅ FIX: Add a small delay to prevent race condition
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (mounted) {
+        await context.read<TeacherProvider>().loadTeachers();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Teacher updated successfully'),
+                ],
+              ),
+              backgroundColor: Colors.green[600],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    }
+  }
+*/
+  void _editTeacher(Map<String, dynamic> teacher) async {
+    // Use MaterialPageRoute instead of named route
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTeacherScreen(teacherData: teacher),
+      ),
+    );
+
+    if (result == true && mounted) {
+      // ✅ Small delay to prevent race condition with Firestore
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (mounted) {
+        // Reload teachers list
+        await context.read<TeacherProvider>().loadTeachers();
+
+        if (mounted) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Teacher updated successfully'),
+                ],
+              ),
+              backgroundColor: Colors.green[600],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildEmptyState() {
@@ -1037,7 +1115,7 @@ class _ManageTeachersScreenState extends State<ManageTeachersScreen> {
       ),
     );
   }
-
+/*
   void _editTeacher(Map<String, dynamic> teacher) async {
     final result = await Navigator.pushNamed(
       context,
@@ -1065,7 +1143,7 @@ class _ManageTeachersScreenState extends State<ManageTeachersScreen> {
       );
     }
   }
-
+*/
   void _confirmDelete(Map<String, dynamic> teacher, TeacherProvider provider) {
     showDialog(
       context: context,

@@ -51,7 +51,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     // Load other data
     await Future.wait([
       context.read<AnnouncementProvider>().fetchAnnouncements(
-        userRole: userRole,
+        userRole: userRole ?? 'teacher',
         userId: userId,
       ),
       if (userId != null)

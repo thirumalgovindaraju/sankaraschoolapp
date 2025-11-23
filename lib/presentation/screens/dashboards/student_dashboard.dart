@@ -50,7 +50,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     await Future.wait([
       // ✅ Pass both userRole and userId to filter announcements
       context.read<AnnouncementProvider>().fetchAnnouncements(
-        userRole: userRole,
+        userRole: userRole ?? 'student', // Provide default value
         userId: userId,
       ),
       if (userId != null)

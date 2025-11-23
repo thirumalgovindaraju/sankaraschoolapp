@@ -1,4 +1,5 @@
-// lib/data/repositories/announcement_repository.dart (FIXED VERSION)
+// lib/data/repositories/announcement_repository.dart
+// ROBUST VERSION WITH FALLBACK
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/announcement_model.dart';
@@ -13,7 +14,6 @@ class AnnouncementRepository {
 
   Future<bool> createAnnouncement(AnnouncementModel announcement) async {
     try {
-      // Generate a unique ID if not provided
       final docId = announcement.id.isEmpty
           ? _firestore.collection(_collection).doc().id
           : announcement.id;
@@ -53,7 +53,7 @@ class AnnouncementRepository {
   }
 
   // ============================================================================
-  // READ
+  // READ - WITH FALLBACK FOR INDEX ISSUES
   // ============================================================================
 
   Future<List<AnnouncementModel>> getAnnouncements({
@@ -64,38 +64,79 @@ class AnnouncementRepository {
     int limit = 20,
   }) async {
     try {
-      Query query = _firestore.collection(_collection);
+      // ✅ Try indexed query first (fast but requires index)
+      if (activeOnly && userRole != null && userRole.isNotEmpty) {
+        try {
+          Query query = _firestore.collection(_collection)
+              .where('isActive', isEqualTo: true)
+              .where('targetAudience', arrayContainsAny: [userRole, 'all'])
+              .orderBy('createdAt', descending: true)
+              .limit(limit);
 
-      // Filter by active status
-      if (activeOnly) {
-        query = query.where('isActive', isEqualTo: true);
+          final snapshot = await query.get();
+
+          final announcements = snapshot.docs
+              .map((doc) => AnnouncementModel.fromJson({
+            ...doc.data() as Map<String, dynamic>,
+            'id': doc.id,
+          }))
+              .toList();
+
+          print('✅ Fetched ${announcements.length} announcements (indexed query)');
+          return announcements;
+
+        } catch (indexError) {
+          print('⚠️ Index not ready, using fallback query');
+
+          // ✅ FALLBACK: Simple query + memory filtering
+          Query fallbackQuery = _firestore.collection(_collection)
+              .orderBy('createdAt', descending: true)
+              .limit(50);
+
+          final snapshot = await fallbackQuery.get();
+
+          // Filter in memory
+          final announcements = snapshot.docs
+              .map((doc) => AnnouncementModel.fromJson({
+            ...doc.data() as Map<String, dynamic>,
+            'id': doc.id,
+          }))
+              .where((announcement) {
+            // Filter by active status
+            if (activeOnly && !announcement.isActive) return false;
+
+            // Filter by target audience
+            if (userRole != null) {
+              return announcement.targetAudience.contains(userRole) ||
+                  announcement.targetAudience.contains('all');
+            }
+
+            return true;
+          })
+              .take(limit)
+              .toList();
+
+          print('✅ Fetched ${announcements.length} announcements (fallback)');
+          return announcements;
+        }
+      } else {
+        // ✅ Simple query (no filters needed)
+        Query query = _firestore.collection(_collection)
+            .orderBy('createdAt', descending: true)
+            .limit(limit);
+
+        final snapshot = await query.get();
+
+        final announcements = snapshot.docs
+            .map((doc) => AnnouncementModel.fromJson({
+          ...doc.data() as Map<String, dynamic>,
+          'id': doc.id,
+        }))
+            .toList();
+
+        print('✅ Fetched ${announcements.length} announcements (simple query)');
+        return announcements;
       }
-
-      // Filter by target audience (role)
-      if (userRole != null) {
-        query = query.where('targetAudience', arrayContains: userRole);
-      }
-
-      // Order by creation date (newest first)
-      query = query.orderBy('createdAt', descending: true);
-
-      // Apply pagination
-      query = query.limit(limit);
-      if (page > 1) {
-        query = query.startAfter([(page - 1) * limit]);
-      }
-
-      final snapshot = await query.get();
-
-      final announcements = snapshot.docs
-          .map((doc) => AnnouncementModel.fromJson({
-        ...doc.data() as Map<String, dynamic>,
-        'id': doc.id,
-      }))
-          .toList();
-
-      print('✅ Fetched ${announcements.length} announcements from Firestore');
-      return announcements;
     } catch (e) {
       print('❌ Error fetching announcements: $e');
       return [];
@@ -140,23 +181,23 @@ class AnnouncementRepository {
     String? userId,
   }) async {
     try {
+      // Simple query first
       Query query = _firestore.collection(_collection)
-          .where('isActive', isEqualTo: true)
-          .where('priority', isEqualTo: 'high');
-
-      if (userRole != null) {
-        query = query.where('targetAudience', arrayContains: userRole);
-      }
-
-      query = query.orderBy('createdAt', descending: true);
+          .where('priority', isEqualTo: 'high')
+          .orderBy('createdAt', descending: true);
 
       final snapshot = await query.get();
 
+      // Filter in memory
       return snapshot.docs
           .map((doc) => AnnouncementModel.fromJson({
         ...doc.data() as Map<String, dynamic>,
         'id': doc.id,
       }))
+          .where((a) => a.isActive)
+          .where((a) => userRole == null ||
+          a.targetAudience.contains(userRole) ||
+          a.targetAudience.contains('all'))
           .toList();
     } catch (e) {
       print('❌ Error fetching urgent announcements: $e');
@@ -228,8 +269,6 @@ class AnnouncementRepository {
     String? userId,
   }) async {
     try {
-      // Note: Firestore doesn't support full-text search natively
-      // This is a basic implementation - consider using Algolia for production
       final allAnnouncements = await getAnnouncements(
         userRole: userRole,
         userId: userId,
@@ -253,22 +292,21 @@ class AnnouncementRepository {
   }) async {
     try {
       Query query = _firestore.collection(_collection)
-          .where('isActive', isEqualTo: true)
-          .where('type', isEqualTo: type);
-
-      if (userRole != null) {
-        query = query.where('targetAudience', arrayContains: userRole);
-      }
-
-      query = query.orderBy('createdAt', descending: true);
+          .where('type', isEqualTo: type)
+          .orderBy('createdAt', descending: true);
 
       final snapshot = await query.get();
 
+      // Filter in memory
       return snapshot.docs
           .map((doc) => AnnouncementModel.fromJson({
         ...doc.data() as Map<String, dynamic>,
         'id': doc.id,
       }))
+          .where((a) => a.isActive)
+          .where((a) => userRole == null ||
+          a.targetAudience.contains(userRole) ||
+          a.targetAudience.contains('all'))
           .toList();
     } catch (e) {
       print('❌ Error fetching announcements by type: $e');
@@ -285,21 +323,20 @@ class AnnouncementRepository {
     try {
       Query query = _firestore.collection(_collection)
           .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-
-      if (userRole != null) {
-        query = query.where('targetAudience', arrayContains: userRole);
-      }
-
-      query = query.orderBy('createdAt', descending: true);
+          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
+          .orderBy('createdAt', descending: true);
 
       final snapshot = await query.get();
 
+      // Filter in memory
       return snapshot.docs
           .map((doc) => AnnouncementModel.fromJson({
         ...doc.data() as Map<String, dynamic>,
         'id': doc.id,
       }))
+          .where((a) => userRole == null ||
+          a.targetAudience.contains(userRole) ||
+          a.targetAudience.contains('all'))
           .toList();
     } catch (e) {
       print('❌ Error fetching announcements by date range: $e');
@@ -363,10 +400,6 @@ class AnnouncementRepository {
       return false;
     }
   }
-
-  // ============================================================================
-  // HELPER METHODS
-  // ============================================================================
 
   Future<List<AnnouncementModel>> getAcademicAnnouncements({
     String? userId,

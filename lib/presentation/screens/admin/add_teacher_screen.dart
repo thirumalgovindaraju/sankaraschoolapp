@@ -1,12 +1,13 @@
-// lib/presentation/screens/admin/add_teacher_screen.dart
+// lib/presentation/screens/admin/add_teacher_screen.dart (COMPLETELY FIXED)
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/admin_provider.dart';
-import '../../providers/dashboard_provider.dart';  // ADD THIS
-import '../../../data/services/activity_service.dart';  // ADD THIS
+import '../../providers/auth_provider.dart';
+import '../../../data/services/activity_service.dart';
+
 class AddTeacherScreen extends StatefulWidget {
-  final Map<String, dynamic>? teacherData; // For editing existing teacher
+  final Map<String, dynamic>? teacherData;
 
   const AddTeacherScreen({Key? key, this.teacherData}) : super(key: key);
 
@@ -110,9 +111,9 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
   void _showClassSelectionDialog() {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (BuildContext context, StateSetter setDialogState) {
             return AlertDialog(
               title: const Text('Select Classes'),
               content: SizedBox(
@@ -120,12 +121,12 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: _classes.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (BuildContext context, int index) {
                     final className = _classes[index];
                     return CheckboxListTile(
                       title: Text(className),
                       value: _selectedClasses.contains(className),
-                      onChanged: (checked) {
+                      onChanged: (bool? checked) {
                         setDialogState(() {
                           if (checked == true) {
                             _selectedClasses.add(className);
@@ -140,13 +141,15 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() {}); // Update parent state
-                    Navigator.pop(context);
+                    setState(() {});
+                    Navigator.of(dialogContext).pop();
                   },
                   child: const Text('Done'),
                 ),
@@ -157,105 +160,19 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
       },
     );
   }
-/*
+
   Future<void> _saveTeacher() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedClasses.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one class'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final teacherData = {
-      'name': _nameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'subject': _selectedSubject,
-      'classes_assigned': _selectedClasses,
-      'qualification': _qualificationController.text.trim(),
-      'experience': int.tryParse(_experienceController.text.trim()) ?? 0,
-      'joining_date': _joiningDateController.text.trim(),
-      'gender': _selectedGender,
-      'address': _addressController.text.trim(),
-    };
-
-    try {
-      final adminProvider = context.read<AdminProvider>();
-      final activityService = ActivityService();
-      bool success = await adminProvider.addTeacher(teacherData);
-
-      // 🔥 ADD THIS BLOCK
-      if (success && widget.teacherData == null) {  // Only for new teachers
-        await activityService.logTeacherAssignment(
-          _nameController.text.trim(),
-          _selectedSubject,
-          _selectedClasses.join(', '),
-        );
-
-        if (mounted) {
-          await context.read<DashboardProvider>().refreshDashboard();
-        }
-      }
-
-      if (widget.teacherData != null) {
-        success = await adminProvider.updateTeacher(
-          widget.teacherData!['teacher_id'],
-          teacherData,
-        );
-      } else {
-        success = await adminProvider.addTeacher(teacherData);
-      }
-
-      setState(() => _isLoading = false);
-
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.teacherData != null
-                ? 'Teacher updated successfully'
-                : 'Teacher added successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context, true);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to save teacher'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('Please select at least one class'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
-    }
-  }
-*/
-  Future<void> _saveTeacher() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_selectedClasses.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one class'),
-          backgroundColor: Colors.orange,
-        ),
-      );
       return;
     }
 
@@ -275,21 +192,18 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
     };
 
     try {
-      final adminProvider = context.read<AdminProvider>();
+      final adminProvider = Provider.of<AdminProvider>(context, listen: false);
       final activityService = ActivityService();
       bool success;
 
       if (widget.teacherData != null) {
-        // UPDATE existing teacher
         success = await adminProvider.updateTeacher(
           widget.teacherData!['teacher_id'],
           teacherData,
         );
       } else {
-        // ADD new teacher
         success = await adminProvider.addTeacher(teacherData);
 
-        // Log activity for new teacher
         if (success) {
           await activityService.logTeacherAssignment(
             _nameController.text.trim(),
@@ -299,12 +213,14 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
         }
       }
 
-      // Refresh dashboard after success
+      // Refresh admin provider data instead of dashboard provider
       if (success && mounted) {
-        await context.read<DashboardProvider>().refreshDashboard();
+        await adminProvider.refresh();
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -315,7 +231,7 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, true);
+        Navigator.of(context).pop(true);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -325,8 +241,8 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
         );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
@@ -336,6 +252,7 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -348,7 +265,6 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Personal Information
             _buildSectionHeader('Personal Information'),
             const SizedBox(height: 16),
             _buildTextField(
@@ -380,11 +296,12 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
                     value: _selectedGender,
                     label: 'Gender',
                     items: _genders,
-                    onChanged: (value) => setState(() => _selectedGender = value!),
+                    onChanged: (value) => setState(() => _selectedGender = value ?? 'Male'),
                   ),
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
             _buildTextField(
               controller: _phoneController,
@@ -401,17 +318,14 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
               icon: Icons.home,
               maxLines: 2,
             ),
-
             const SizedBox(height: 32),
-
-            // Professional Information
             _buildSectionHeader('Professional Information'),
             const SizedBox(height: 16),
             _buildDropdown(
               value: _selectedSubject,
               label: 'Subject',
               items: _subjects,
-              onChanged: (value) => setState(() => _selectedSubject = value!),
+              onChanged: (value) => setState(() => _selectedSubject = value ?? 'Mathematics'),
             ),
             const SizedBox(height: 16),
             InkWell(
@@ -492,10 +406,7 @@ class _AddTeacherScreenState extends State<AddTeacherScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 32),
-
-            // Save Button
             ElevatedButton(
               onPressed: _isLoading ? null : _saveTeacher,
               style: ElevatedButton.styleFrom(

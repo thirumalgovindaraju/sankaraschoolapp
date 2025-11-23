@@ -35,13 +35,17 @@ class _ParentDashboardState extends State<ParentDashboard> {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
     final userRole = authProvider.currentUser?.role?.name;
-
+    final userEmail = authProvider.currentUser?.email; // 🆕 Get email
+    print('📊 Loading parent dashboard for: $userId');
+    print('📧 Parent email: $userEmail'); // 🆕 Debug log
     await Future.wait([
       context.read<AnnouncementProvider>().fetchAnnouncements(
         userRole: userRole ?? 'parent', // Provide default value
         userId: userId,
       ),
-      if (userId != null)
+      if (userEmail != null && userEmail.isNotEmpty)
+        context.read<NotificationProvider>().fetchNotifications(userEmail)
+      else if (userId != null)
         context.read<NotificationProvider>().fetchNotifications(userId),
     ]);
 

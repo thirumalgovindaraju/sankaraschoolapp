@@ -54,7 +54,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final currentUser = authProvider.currentUser;
-
+    final userEmail = authProvider.currentUser?.email;
     if (currentUser == null) return;
 
     final userId = currentUser.id;
@@ -74,7 +74,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       context.read<TeacherProvider>().loadTeachers(),
     ];
 
-    if (userId != null) {
+    if (userEmail != null && userEmail.isNotEmpty)
+      futures.add(context.read<NotificationProvider>().fetchNotifications(userEmail));
+    else if (userId != null) {
       futures.add(context.read<NotificationProvider>().fetchNotifications(userId));
     }
 

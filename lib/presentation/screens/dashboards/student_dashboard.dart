@@ -42,6 +42,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final userEmail = user.email; // ✅ GET EMAIL
     final userRole = user.role?.name ?? 'student';
 
+
     await Future.wait([
       // ✅ Fetch announcements with role filtering
       context.read<AnnouncementProvider>().fetchAnnouncements(

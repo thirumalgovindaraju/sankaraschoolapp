@@ -1,432 +1,603 @@
-// lib/presentation/screens/announcements/create_announcement_screen.dart
+// lib/data/services/dashboard_integration_service.dart
+// This service integrates notifications, announcements, and attendance across all dashboards
 
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/announcement_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '/data/models/notification_model.dart';
+import '/data/models/announcement_model.dart';
+import '/data/models/attendance_model.dart';
+import '/data/models/user_model.dart';
+import '/data/services/attendance_service.dart';
+import '/data/services/local_notification_service.dart';
+import '/data/repositories/announcement_repository.dart';
+class DashboardIntegrationService {
+  final LocalNotificationService _notificationService = LocalNotificationService();
+  final AttendanceService _attendanceService = AttendanceService();
+  final AnnouncementRepository _announcementRepo = AnnouncementRepository();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-class CreateAnnouncementScreen extends StatefulWidget {
-  const CreateAnnouncementScreen({Key? key}) : super(key: key);
+  // ============================================================================
+  // ADMIN DASHBOARD DATA
+  // ============================================================================
 
-  @override
-  State<CreateAnnouncementScreen> createState() => _CreateAnnouncementScreenState();
-}
+  /// Get complete admin dashboard data
+  Future<Map<String, dynamic>> getAdminDashboardData() async {
+    try {
+      print('📊 Loading admin dashboard data...');
 
-class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _messageController = TextEditingController();
+      final results = await Future.wait([
+        _getRecentNotificationsByEmail('principal@school.com', limit: 5), // Use admin email
+        _getRecentAnnouncements(userRole: 'admin', limit: 5),
+        _getTodayAttendanceStats(),
+        _getUnreadNotificationsCountByEmail('principal@school.com'), // Use admin email
+        _getPendingTasksCount(),
+      ]);
 
-  String _selectedType = 'general';
-  String _selectedPriority = 'medium';
-  List<String> _selectedAudience = ['all'];
-  List<String> _selectedClasses = [];
-  DateTime? _expiryDate;
-  bool _isLoading = false;
-  bool _sendPushNotification = true; // NEW: Toggle for notifications
-  bool _pinAnnouncement = false; // NEW: Toggle for pinning
+      final data = {
+        'recent_notifications': results[0],
+        'recent_announcements': results[1],
+        'attendance_stats': results[2],
+        'unread_count': results[3],
+        'pending_tasks': results[4],
+        'last_updated': DateTime.now().toIso8601String(),
+      };
 
-  final List<String> _types = ['academic', 'general', 'urgent', 'event', 'holiday'];
-  final List<String> _priorities = ['high', 'medium', 'low'];
-  final List<String> _audiences = ['all', 'student', 'parent', 'teacher'];
-  final List<String> _classes = [
-    'Pre-KG', 'LKG', 'UKG', 'Grade 1', 'Grade 2', 'Grade 3',
-    'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8',
-    'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
-  ];
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _messageController.dispose();
-    super.dispose();
+      print('✅ Admin dashboard data loaded successfully');
+      return data;
+    } catch (e) {
+      print('❌ Error loading admin dashboard data: $e');
+      return _getEmptyAdminData();
+    }
   }
 
-  Future<void> _createAnnouncement() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.currentUser;
-
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not found. Please login again.')),
-      );
-      setState(() => _isLoading = false);
-      return;
-    }
-
+  /// Get today's attendance statistics
+  Future<Map<String, dynamic>> _getTodayAttendanceStats() async {
     try {
-      final success = await context.read<AnnouncementProvider>().createAnnouncement(
-        title: _titleController.text.trim(),
-        message: _messageController.text.trim(),
-        type: _selectedType,
-        priority: _selectedPriority,
-        targetAudience: _selectedAudience,
-        targetClasses: _selectedClasses.isEmpty ? null : _selectedClasses,
-        createdBy: user.id,
-        createdByName: user.name,
-        createdByRole: user.role?.name ?? 'admin',
-        expiryDate: _expiryDate,
-        sendNotifications: _sendPushNotification, // NEW: Pass notification preference
+      final stats = await _attendanceService.getAttendanceStatistics();
+      return {
+        'total_students': stats['total_students'] ?? 0,
+        'present_today': stats['present_today'] ?? 0,
+        'absent_today': stats['absent_today'] ?? 0,
+        'late_today': stats['late_today'] ?? 0,
+        'attendance_percentage': stats['average_attendance'] ?? 0.0,
+      };
+    } catch (e) {
+      print('❌ Error getting attendance stats: $e');
+      return {
+        'total_students': 0,
+        'present_today': 0,
+        'absent_today': 0,
+        'late_today': 0,
+        'attendance_percentage': 0.0,
+      };
+    }
+  }
+
+  /// Get pending tasks count (for admin)
+  Future<int> _getPendingTasksCount() async {
+    // TODO: Implement actual pending tasks logic
+    return 0;
+  }
+
+  Map<String, dynamic> _getEmptyAdminData() {
+    return {
+      'recent_notifications': [],
+      'recent_announcements': [],
+      'attendance_stats': {
+        'total_students': 0,
+        'present_today': 0,
+        'absent_today': 0,
+        'late_today': 0,
+        'attendance_percentage': 0.0,
+      },
+      'unread_count': 0,
+      'pending_tasks': 0,
+      'last_updated': DateTime.now().toIso8601String(),
+    };
+  }
+
+  // ============================================================================
+  // TEACHER DASHBOARD DATA
+  // ============================================================================
+
+  /// Get complete teacher dashboard data
+  Future<Map<String, dynamic>> getTeacherDashboardData({
+    required String teacherId,
+    required String teacherName,
+  }) async {
+    try {
+      print('👨‍🏫 Loading teacher dashboard data for: $teacherName');
+
+      // Get teacher email from Firestore
+      final teacherEmail = await _getUserEmail(teacherId, 'teachers');
+
+      final results = await Future.wait([
+        _getRecentNotificationsByEmail(teacherEmail, limit: 5),
+        _getRecentAnnouncements(userRole: 'teacher', limit: 5),
+        _getTeacherClasses(teacherId),
+        _getUnreadNotificationsCountByEmail(teacherEmail),
+        _getTodayClassAttendanceStatus(teacherId),
+      ]);
+
+      final data = {
+        'recent_notifications': results[0],
+        'recent_announcements': results[1],
+        'assigned_classes': results[2],
+        'unread_count': results[3],
+        'attendance_status': results[4],
+        'teacher_id': teacherId,
+        'teacher_name': teacherName,
+        'last_updated': DateTime.now().toIso8601String(),
+      };
+
+      print('✅ Teacher dashboard data loaded successfully');
+      return data;
+    } catch (e) {
+      print('❌ Error loading teacher dashboard data: $e');
+      return _getEmptyTeacherData(teacherId, teacherName);
+    }
+  }
+
+  /// Get teacher's assigned classes
+  Future<List<Map<String, dynamic>>> _getTeacherClasses(String teacherId) async {
+    // TODO: Implement actual teacher classes fetching
+    return [];
+  }
+
+  /// Get today's class attendance status for teacher
+  Future<Map<String, dynamic>> _getTodayClassAttendanceStatus(String teacherId) async {
+    try {
+      // Check if attendance is marked for teacher's classes today
+      final today = DateTime.now();
+      // TODO: Implement actual logic based on teacher's assigned classes
+      return {
+        'classes_total': 0,
+        'attendance_marked': 0,
+        'attendance_pending': 0,
+      };
+    } catch (e) {
+      print('❌ Error getting class attendance status: $e');
+      return {
+        'classes_total': 0,
+        'attendance_marked': 0,
+        'attendance_pending': 0,
+      };
+    }
+  }
+
+  Map<String, dynamic> _getEmptyTeacherData(String teacherId, String teacherName) {
+    return {
+      'recent_notifications': [],
+      'recent_announcements': [],
+      'assigned_classes': [],
+      'unread_count': 0,
+      'attendance_status': {
+        'classes_total': 0,
+        'attendance_marked': 0,
+        'attendance_pending': 0,
+      },
+      'teacher_id': teacherId,
+      'teacher_name': teacherName,
+      'last_updated': DateTime.now().toIso8601String(),
+    };
+  }
+
+  // ============================================================================
+  // STUDENT DASHBOARD DATA
+  // ============================================================================
+
+  /// Get complete student dashboard data
+  Future<Map<String, dynamic>> getStudentDashboardData({
+    required String studentId,
+    required String studentName,
+    required String className,
+  }) async {
+    try {
+      print('👨‍🎓 Loading student dashboard data for: $studentName');
+
+      // Get student email from Firestore
+      final studentEmail = await _getUserEmail(studentId, 'students');
+      print('📧 Student email: $studentEmail');
+
+      final results = await Future.wait([
+        _getRecentNotificationsByEmail(studentEmail, limit: 5),
+        _getRecentAnnouncements(userRole: 'student', limit: 5),
+        _getStudentAttendanceSummary(studentId),
+        _getUnreadNotificationsCountByEmail(studentEmail),
+        _getTodayStudentAttendance(studentId),
+      ]);
+
+      final data = {
+        'recent_notifications': results[0],
+        'recent_announcements': results[1],
+        'attendance_summary': results[2],
+        'unread_count': results[3],
+        'today_attendance': results[4],
+        'student_id': studentId,
+        'student_name': studentName,
+        'class_name': className,
+        'last_updated': DateTime.now().toIso8601String(),
+      };
+
+      print('✅ Student dashboard data loaded successfully');
+      return data;
+    } catch (e) {
+      print('❌ Error loading student dashboard data: $e');
+      return _getEmptyStudentData(studentId, studentName, className);
+    }
+  }
+
+  /// Get student's attendance summary
+  Future<Map<String, dynamic>> _getStudentAttendanceSummary(String studentId) async {
+    try {
+      final summary = await _attendanceService.getAttendanceSummary(
+        studentId: studentId,
       );
 
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                _sendPushNotification
-                    ? 'Announcement created and notifications sent!'
-                    : 'Announcement created successfully!',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pop(context);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create announcement'),
-              backgroundColor: Colors.red,
-            ),
-          );
+      if (summary == null) {
+        return {
+          'total_days': 0,
+          'present_days': 0,
+          'absent_days': 0,
+          'late_days': 0,
+          'attendance_percentage': 0.0,
+        };
+      }
+
+      return {
+        'total_days': summary.totalDays,
+        'present_days': summary.presentDays,
+        'absent_days': summary.absentDays,
+        'late_days': summary.lateDays,
+        'attendance_percentage': summary.attendancePercentage,
+      };
+    } catch (e) {
+      print('❌ Error getting student attendance summary: $e');
+      return {
+        'total_days': 0,
+        'present_days': 0,
+        'absent_days': 0,
+        'late_days': 0,
+        'attendance_percentage': 0.0,
+      };
+    }
+  }
+
+  /// Get today's attendance for student
+  Future<Map<String, dynamic>?> _getTodayStudentAttendance(String studentId) async {
+    try {
+      final attendance = await _attendanceService.getTodayAttendance(studentId);
+
+      if (attendance == null) {
+        return null;
+      }
+
+      return {
+        'status': attendance.status,
+        'marked_at': attendance.markedAt.toIso8601String(),
+        'marked_by': attendance.markedByName,
+        'remarks': attendance.remarks,
+      };
+    } catch (e) {
+      print('❌ Error getting today\'s attendance: $e');
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _getEmptyStudentData(
+      String studentId,
+      String studentName,
+      String className,
+      ) {
+    return {
+      'recent_notifications': [],
+      'recent_announcements': [],
+      'attendance_summary': {
+        'total_days': 0,
+        'present_days': 0,
+        'absent_days': 0,
+        'late_days': 0,
+        'attendance_percentage': 0.0,
+      },
+      'unread_count': 0,
+      'today_attendance': null,
+      'student_id': studentId,
+      'student_name': studentName,
+      'class_name': className,
+      'last_updated': DateTime.now().toIso8601String(),
+    };
+  }
+
+  // ============================================================================
+  // PARENT DASHBOARD DATA
+  // ============================================================================
+
+  /// Get complete parent dashboard data
+  Future<Map<String, dynamic>> getParentDashboardData({
+    required String parentId,
+    required List<Map<String, dynamic>> children,
+  }) async {
+    try {
+      print('👨‍👩‍👧‍👦 Loading parent dashboard data for parent: $parentId');
+
+      // Get parent email from Firestore
+      final parentEmail = await _getUserEmail(parentId, 'parents');
+
+      final results = await Future.wait([
+        _getRecentNotificationsByEmail(parentEmail, limit: 5),
+        _getRecentAnnouncements(userRole: 'parent', limit: 5),
+        _getUnreadNotificationsCountByEmail(parentEmail),
+        _getChildrenAttendanceSummary(children),
+      ]);
+
+      final data = {
+        'recent_notifications': results[0],
+        'recent_announcements': results[1],
+        'unread_count': results[2],
+        'children_attendance': results[3],
+        'children': children,
+        'parent_id': parentId,
+        'last_updated': DateTime.now().toIso8601String(),
+      };
+
+      print('✅ Parent dashboard data loaded successfully');
+      return data;
+    } catch (e) {
+      print('❌ Error loading parent dashboard data: $e');
+      return _getEmptyParentData(parentId, children);
+    }
+  }
+
+  /// Get attendance summary for all children
+  Future<List<Map<String, dynamic>>> _getChildrenAttendanceSummary(
+      List<Map<String, dynamic>> children,
+      ) async {
+    try {
+      final summaries = <Map<String, dynamic>>[];
+
+      for (var child in children) {
+        final studentId = child['student_id'] as String;
+        final summary = await _getStudentAttendanceSummary(studentId);
+        final todayAttendance = await _getTodayStudentAttendance(studentId);
+
+        summaries.add({
+          'student_id': studentId,
+          'student_name': child['name'],
+          'class': child['class'],
+          'summary': summary,
+          'today_attendance': todayAttendance,
+        });
+      }
+
+      return summaries;
+    } catch (e) {
+      print('❌ Error getting children attendance: $e');
+      return [];
+    }
+  }
+
+  Map<String, dynamic> _getEmptyParentData(
+      String parentId,
+      List<Map<String, dynamic>> children,
+      ) {
+    return {
+      'recent_notifications': [],
+      'recent_announcements': [],
+      'unread_count': 0,
+      'children_attendance': [],
+      'children': children,
+      'parent_id': parentId,
+      'last_updated': DateTime.now().toIso8601String(),
+    };
+  }
+
+  // ============================================================================
+  // SHARED HELPER METHODS - UPDATED TO USE EMAIL
+  // ============================================================================
+
+  /// Get user email from Firestore based on user ID and collection
+  Future<String> _getUserEmail(String userId, String collection) async {
+    try {
+      final doc = await _firestore.collection(collection).doc(userId).get();
+
+      if (doc.exists) {
+        final email = doc.data()?['email'] as String?;
+        if (email != null && email.isNotEmpty) {
+          return email;
         }
       }
+
+      print('⚠️ Email not found for user: $userId in collection: $collection');
+      return userId; // Fallback to userId if email not found
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+      print('❌ Error fetching user email: $e');
+      return userId; // Fallback to userId on error
+    }
+  }
+
+  /// Get recent notifications using email (NEW METHOD)
+  Future<List<NotificationModel>> _getRecentNotificationsByEmail(
+      String email, {
+        int limit = 5,
+      }) async {
+    try {
+      print('📧 Fetching notifications for email: $email');
+      final notifications = await _notificationService.getUserNotifications(
+        email,
+        limit: limit,
+      );
+      print('✅ Found ${notifications.length} notifications for: $email');
+      return notifications;
+    } catch (e) {
+      print('❌ Error getting recent notifications: $e');
+      return [];
+    }
+  }
+
+  /// Get unread notifications count using email (NEW METHOD)
+  Future<int> _getUnreadNotificationsCountByEmail(String email) async {
+    try {
+      return await _notificationService.getUnreadCount(email);
+    } catch (e) {
+      print('❌ Error getting unread count: $e');
+      return 0;
+    }
+  }
+
+  /// Get recent notifications for a user (DEPRECATED - kept for compatibility)
+  @deprecated
+  Future<List<NotificationModel>> _getRecentNotifications(
+      String userId, {
+        int limit = 5,
+      }) async {
+    try {
+      return await _notificationService.getUserNotifications(
+        userId,
+        limit: limit,
+      );
+    } catch (e) {
+      print('❌ Error getting recent notifications: $e');
+      return [];
+    }
+  }
+
+  /// Get recent announcements
+  Future<List<AnnouncementModel>> _getRecentAnnouncements({
+    String? userRole,
+    int limit = 5,
+  }) async {
+    try {
+      return await _announcementRepo.getRecentAnnouncements(
+        userRole: userRole,
+        limit: limit,
+      );
+    } catch (e) {
+      print('❌ Error getting recent announcements: $e');
+      return [];
+    }
+  }
+
+  /// Get unread notifications count (DEPRECATED - kept for compatibility)
+  @deprecated
+  Future<int> _getUnreadNotificationsCount(String userId) async {
+    try {
+      return await _notificationService.getUnreadCount(userId);
+    } catch (e) {
+      print('❌ Error getting unread count: $e');
+      return 0;
+    }
+  }
+
+  // ============================================================================
+  // REAL-TIME UPDATES
+  // ============================================================================
+
+  /// Send notification when attendance is marked
+  Future<void> notifyAttendanceMarked({
+    required String studentId,
+    required String studentName,
+    required String status,
+    required String markedBy,
+    required String className,
+    List<String>? parentIds,
+  }) async {
+    try {
+      final date = DateTime.now();
+      final formattedDate = '${date.day}/${date.month}/${date.year}';
+
+      // Get student email
+      final studentEmail = await _getUserEmail(studentId, 'students');
+
+      // Create notification for student using email
+      await _notificationService.createNotification(
+        userId: studentEmail, // Using email
+        title: 'Attendance Marked',
+        message: 'Your attendance for today ($formattedDate) has been marked as $status',
+        type: 'attendance',
+        priority: status.toLowerCase() == 'absent' ? 'high' : 'medium',
+        senderId: markedBy,
+        senderRole: 'teacher',
+      );
+
+      // Create notifications for parents
+      if (parentIds != null && parentIds.isNotEmpty) {
+        // Get parent emails
+        final parentEmails = <String>[];
+        for (String parentId in parentIds) {
+          final email = await _getUserEmail(parentId, 'parents');
+          parentEmails.add(email);
+        }
+
+        await _notificationService.sendAttendanceNotification(
+          studentId: studentEmail, // Using email
+          parentIds: parentEmails, // Using emails
+          studentName: studentName,
+          status: status,
+          date: formattedDate,
+          markedBy: markedBy,
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+
+      print('✅ Attendance notifications sent successfully');
+    } catch (e) {
+      print('❌ Error sending attendance notifications: $e');
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: const Text('Create Announcement'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  // Title
-                  TextFormField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Title *',
-                    hintText: 'Enter announcement title',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.title),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a title';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+  /// Send notification when announcement is created
+  Future<void> notifyAnnouncementCreated({
+    required AnnouncementModel announcement,
+    required List<String> targetUserIds,
+  }) async {
+    try {
+      // targetUserIds are already emails from announcement repository
+      await _notificationService.sendAnnouncementNotification(
+        userIds: targetUserIds, // These are already emails
+        title: announcement.title,
+        message: announcement.message,
+        announcementId: announcement.id,
+        senderId: announcement.createdBy,
+        senderName: announcement.createdByName,
+        senderRole: announcement.createdByRole,
+        priority: announcement.priority,
+      );
 
-                // Message
-                TextFormField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Message *',
-                    hintText: 'Enter announcement message',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.message),
-                    alignLabelWithHint: true,
-                  ),
-                  maxLines: 6,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a message';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+      print('✅ Announcement notifications sent to ${targetUserIds.length} users');
+    } catch (e) {
+      print('❌ Error sending announcement notifications: $e');
+    }
+  }
 
-                // Type
-                DropdownButtonFormField<String>(
-                  value: _selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Type *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.category),
-                  ),
-                  items: _types.map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Text(type.toUpperCase()),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedType = value!);
-                  },
-                ),
-                const SizedBox(height: 16),
+  // ============================================================================
+  // DASHBOARD REFRESH
+  // ============================================================================
 
-                // Priority
-                DropdownButtonFormField<String>(
-                  value: _selectedPriority,
-                  decoration: const InputDecoration(
-                    labelText: 'Priority *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.flag),
-                  ),
-                  items: _priorities.map((priority) {
-                    return DropdownMenuItem(
-                      value: priority,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.circle,
-                            size: 12,
-                            color: priority == 'high'
-                                ? Colors.red
-                                : priority == 'medium'
-                                ? Colors.orange
-                                : Colors.green,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(priority.toUpperCase()),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedPriority = value!);
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Target Audience
-                const Text(
-                  'Target Audience *',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _audiences.map((audience) {
-                    final isSelected = _selectedAudience.contains(audience);
-                    return FilterChip(
-                      label: Text(audience.toUpperCase()),
-                      selected: isSelected,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (audience == 'all') {
-                            _selectedAudience = selected ? ['all'] : [];
-                          } else {
-                            _selectedAudience.remove('all');
-                            if (selected) {
-                              _selectedAudience.add(audience);
-                            } else {
-                              _selectedAudience.remove(audience);
-                            }
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Target Classes (Optional)
-                const Text(
-                  'Target Classes (Optional)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const Text(
-                  'Leave empty to send to all classes',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _classes.map((className) {
-                    final isSelected = _selectedClasses.contains(className);
-                    return FilterChip(
-                      label: Text(className),
-                      selected: isSelected,
-                      selectedColor: Theme.of(context).colorScheme.secondaryContainer,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedClasses.add(className);
-                          } else {
-                            _selectedClasses.remove(className);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Expiry Date (Optional)
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.calendar_today),
-                    title: const Text('Expiry Date (Optional)'),
-                    subtitle: Text(
-                      _expiryDate != null
-                          ? '${_expiryDate!.day}/${_expiryDate!.month}/${_expiryDate!.year}'
-                          : 'No expiry date',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_expiryDate != null)
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() => _expiryDate = null);
-                            },
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.edit_calendar),
-                          onPressed: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: DateTime.now().add(const Duration(days: 7)),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (date != null) {
-                              setState(() => _expiryDate = date);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Options Section
-                const Text(
-                    'Options',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                    const SizedBox(height: 8),
-
-                    // Pin Announcement Toggle
-                    Card(
-                      child: SwitchListTile(
-                        secondary: const Icon(Icons.push_pin),
-                        title: const Text('Pin Announcement'),
-                        subtitle: const Text('Keep at top of the list'),
-                        value: _pinAnnouncement,
-                        onChanged: (value) {
-                          setState(() => _pinAnnouncement = value);
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Send Push Notification Toggle
-                    Card(
-                      child: SwitchListTile(
-                        secondary: const Icon(Icons.notifications_active),
-                        title: const Text('Send Push Notification'),
-                        subtitle: Text(
-                          _sendPushNotification
-                              ? 'Users will receive notifications'
-                              : 'No notifications will be sent',
-                        ),
-                        value: _sendPushNotification,
-                        activeColor: Colors.green,
-                        onChanged: (value) {
-                          setState(() => _sendPushNotification = value);
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Submit Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _createAnnouncement,
-                        icon: _isLoading
-                            ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          _isLoading ? 'Creating...' : 'Create Announcement',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Info Card
-                    Card(
-                      color: Colors.blue.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.blue.shade700),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _sendPushNotification
-                                    ? 'Notifications will be sent to all selected audiences immediately'
-                                    : 'Announcement will be created without sending notifications',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue.shade900,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ),
-        ),
-    );
+  /// Refresh dashboard data based on user role
+  Future<Map<String, dynamic>> refreshDashboardData(UserModel user) async {
+    switch (user.role?.name) {
+      case 'admin':
+        return await getAdminDashboardData();
+      case 'teacher':
+        return await getTeacherDashboardData(
+          teacherId: user.id,
+          teacherName: user.name,
+        );
+      case 'student':
+      // Assuming student has class info in metadata
+        final className = user.email.split('@')[0]; // Placeholder
+        return await getStudentDashboardData(
+          studentId: user.id,
+          studentName: user.name,
+          className: className,
+        );
+      case 'parent':
+      // TODO: Get actual children data
+        return await getParentDashboardData(
+          parentId: user.id,
+          children: [],
+        );
+      default:
+        return {};
+    }
   }
 }

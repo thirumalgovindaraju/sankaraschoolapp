@@ -32,8 +32,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
+    final userEmail = authProvider.currentUser?.email; // 🆕 Get email
     final userRole = authProvider.currentUser?.role?.name;
-
+    print('📊 Loading teacher dashboard for: $userId');
+    print('📧 Teacher email: $userEmail'); // 🆕 Debug log
     // Load attendance data ONCE
     if (!_attendanceLoaded) {
       final classId = '10-A'; // TODO: Get from teacher's profile
@@ -54,7 +56,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         userRole: userRole ?? 'teacher',
         userId: userId,
       ),
-      if (userId != null)
+      // 🆕 FIXED: Use email instead of userId for notifications
+      if (userEmail != null && userEmail.isNotEmpty)
+        context.read<NotificationProvider>().fetchNotifications(userEmail)
+      else if (userId != null)
         context.read<NotificationProvider>().fetchNotifications(userId),
     ]);
   }

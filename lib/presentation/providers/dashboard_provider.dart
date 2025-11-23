@@ -165,6 +165,7 @@ class DashboardProvider extends ChangeNotifier {
   Future<void> loadTeacherDashboard({
     required String teacherId,
     required String teacherName,
+    required String teacherEmail, // ✅ ADD THIS PARAMETER
   }) async {
     _isLoading = true;
     _error = null;
@@ -174,6 +175,7 @@ class DashboardProvider extends ChangeNotifier {
       final data = await _integrationService.getTeacherDashboardData(
         teacherId: teacherId,
         teacherName: teacherName,
+        teacherEmail: teacherEmail, // ✅ PASS EMAIL
       );
 
       _dashboardData = data;
@@ -217,7 +219,7 @@ class DashboardProvider extends ChangeNotifier {
     required String studentId,
     required String studentName,
     required String className,
-    required String studentEmail,  // ← ADD THIS
+    required String studentEmail, // ✅ ALREADY HAS THIS
   }) async {
     _isLoading = true;
     _error = null;
@@ -228,7 +230,7 @@ class DashboardProvider extends ChangeNotifier {
         studentId: studentId,
         studentName: studentName,
         className: className,
-        studentEmail: studentEmail,  // ← PASS EMAIL
+        studentEmail: studentEmail, // ✅ ALREADY PASSES EMAIL
       );
 
       _dashboardData = data;
@@ -273,6 +275,7 @@ class DashboardProvider extends ChangeNotifier {
   /// Load parent-specific dashboard data
   Future<void> loadParentDashboard({
     required String parentId,
+    required String parentEmail, // ✅ ADD THIS PARAMETER
     required List<Map<String, dynamic>> children,
   }) async {
     _isLoading = true;
@@ -282,6 +285,7 @@ class DashboardProvider extends ChangeNotifier {
     try {
       final data = await _integrationService.getParentDashboardData(
         parentId: parentId,
+        parentEmail: parentEmail, // ✅ PASS EMAIL
         children: children,
       );
 

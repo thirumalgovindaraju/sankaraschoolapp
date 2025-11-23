@@ -1,5 +1,5 @@
 // lib/data/services/dashboard_integration_service.dart
-// This service integrates notifications, announcements, and attendance across all dashboards
+// FIXED VERSION - Corrected parameter issues and user reference
 
 import 'package:flutter/foundation.dart';
 import '../models/notification_model.dart';
@@ -25,10 +25,10 @@ class DashboardIntegrationService {
       print('📊 Loading admin dashboard data...');
 
       final results = await Future.wait([
-        _getRecentNotifications('ADM001', limit: 5),
+        _getRecentNotifications('admin@school.com', limit: 5), // Use admin email
         _getRecentAnnouncements(userRole: 'admin', limit: 5),
         _getTodayAttendanceStats(),
-        _getUnreadNotificationsCount('ADM001'),
+        _getUnreadNotificationsCount('admin@school.com'),
         _getPendingTasksCount(),
       ]);
 
@@ -103,15 +103,16 @@ class DashboardIntegrationService {
   Future<Map<String, dynamic>> getTeacherDashboardData({
     required String teacherId,
     required String teacherName,
+    required String teacherEmail, // ✅ ADD EMAIL PARAMETER
   }) async {
     try {
       print('👨‍🏫 Loading teacher dashboard data for: $teacherName');
 
       final results = await Future.wait([
-        _getRecentNotifications(teacherId, limit: 5),
+        _getRecentNotifications(teacherEmail, limit: 5), // ✅ USE EMAIL
         _getRecentAnnouncements(userRole: 'teacher', limit: 5),
         _getTeacherClasses(teacherId),
-        _getUnreadNotificationsCount(teacherId),
+        _getUnreadNotificationsCount(teacherEmail), // ✅ USE EMAIL
         _getTodayClassAttendanceStatus(teacherId),
       ]);
 
@@ -187,15 +188,16 @@ class DashboardIntegrationService {
     required String studentId,
     required String studentName,
     required String className,
+    required String studentEmail, // ✅ EMAIL PARAMETER REQUIRED
   }) async {
     try {
       print('👨‍🎓 Loading student dashboard data for: $studentName');
 
       final results = await Future.wait([
-        _getRecentNotifications(studentId, limit: 5),
+        _getRecentNotifications(studentEmail, limit: 5), // ✅ USE EMAIL
         _getRecentAnnouncements(userRole: 'student', limit: 5),
         _getStudentAttendanceSummary(studentId),
-        _getUnreadNotificationsCount(studentId),
+        _getUnreadNotificationsCount(studentEmail), // ✅ USE EMAIL
         _getTodayStudentAttendance(studentId),
       ]);
 
@@ -307,15 +309,16 @@ class DashboardIntegrationService {
   /// Get complete parent dashboard data
   Future<Map<String, dynamic>> getParentDashboardData({
     required String parentId,
+    required String parentEmail, // ✅ ADD EMAIL PARAMETER
     required List<Map<String, dynamic>> children,
   }) async {
     try {
       print('👨‍👩‍👧‍👦 Loading parent dashboard data for parent: $parentId');
 
       final results = await Future.wait([
-        _getRecentNotifications(parentId, limit: 5),
+        _getRecentNotifications(parentEmail, limit: 5), // ✅ USE EMAIL
         _getRecentAnnouncements(userRole: 'parent', limit: 5),
-        _getUnreadNotificationsCount(parentId),
+        _getUnreadNotificationsCount(parentEmail), // ✅ USE EMAIL
         _getChildrenAttendanceSummary(children),
       ]);
 
@@ -384,14 +387,14 @@ class DashboardIntegrationService {
   // SHARED HELPER METHODS
   // ============================================================================
 
-  /// Get recent notifications for a user
+  /// Get recent notifications for a user (using email)
   Future<List<NotificationModel>> _getRecentNotifications(
-      String userId, {
+      String userEmail, { // ✅ CHANGED FROM userId TO userEmail
         int limit = 5,
       }) async {
     try {
       return await _notificationService.getUserNotifications(
-        userId,
+        userEmail, // ✅ USE EMAIL DIRECTLY
         limit: limit,
       );
     } catch (e) {
@@ -416,10 +419,10 @@ class DashboardIntegrationService {
     }
   }
 
-  /// Get unread notifications count
-  Future<int> _getUnreadNotificationsCount(String userId) async {
+  /// Get unread notifications count (using email)
+  Future<int> _getUnreadNotificationsCount(String userEmail) async { // ✅ CHANGED PARAMETER NAME
     try {
-      return await _notificationService.getUnreadCount(userId);
+      return await _notificationService.getUnreadCount(userEmail); // ✅ USE EMAIL
     } catch (e) {
       print('❌ Error getting unread count: $e');
       return 0;
@@ -433,19 +436,20 @@ class DashboardIntegrationService {
   /// Send notification when attendance is marked
   Future<void> notifyAttendanceMarked({
     required String studentId,
+    required String studentEmail, // ✅ ADD EMAIL PARAMETER
     required String studentName,
     required String status,
     required String markedBy,
     required String className,
-    List<String>? parentIds,
+    List<String>? parentEmails, // ✅ RENAMED FROM parentIds TO parentEmails
   }) async {
     try {
       final date = DateTime.now();
       final formattedDate = '${date.day}/${date.month}/${date.year}';
 
-      // Create notification for student
+      // Create notification for student using email
       await _notificationService.createNotification(
-        userId: studentId,
+        userId: studentEmail, // ✅ USE EMAIL
         title: 'Attendance Marked',
         message: 'Your attendance for today ($formattedDate) has been marked as $status',
         type: 'attendance',
@@ -454,11 +458,11 @@ class DashboardIntegrationService {
         senderRole: 'teacher',
       );
 
-      // Create notifications for parents
-      if (parentIds != null && parentIds.isNotEmpty) {
+      // Create notifications for parents using their emails
+      if (parentEmails != null && parentEmails.isNotEmpty) {
         await _notificationService.sendAttendanceNotification(
-          studentId: studentId,
-          parentIds: parentIds,
+          studentId: studentEmail, // ✅ USE STUDENT EMAIL
+          parentIds: parentEmails, // These are already emails
           studentName: studentName,
           status: status,
           date: formattedDate,
@@ -475,11 +479,11 @@ class DashboardIntegrationService {
   /// Send notification when announcement is created
   Future<void> notifyAnnouncementCreated({
     required AnnouncementModel announcement,
-    required List<String> targetUserIds,
+    required List<String> targetUserEmails, // ✅ RENAMED FROM targetUserIds
   }) async {
     try {
       await _notificationService.sendAnnouncementNotification(
-        userIds: targetUserIds,
+        userIds: targetUserEmails, // These are emails
         title: announcement.title,
         message: announcement.message,
         announcementId: announcement.id,
@@ -489,7 +493,7 @@ class DashboardIntegrationService {
         priority: announcement.priority,
       );
 
-      print('✅ Announcement notifications sent to ${targetUserIds.length} users');
+      print('✅ Announcement notifications sent to ${targetUserEmails.length} users');
     } catch (e) {
       print('❌ Error sending announcement notifications: $e');
     }
@@ -504,25 +508,45 @@ class DashboardIntegrationService {
     switch (user.role?.name) {
       case 'admin':
         return await getAdminDashboardData();
+
       case 'teacher':
         return await getTeacherDashboardData(
           teacherId: user.id,
           teacherName: user.name,
+          teacherEmail: user.email, // ✅ PASS EMAIL
         );
+
       case 'student':
-      // Assuming student has class info in metadata
-        final className = user.email.split('@')[0]; // Placeholder
+      // Get class name - extract from email or metadata
+        String className = 'Unknown';
+
+        // Try to get class from metadata if available
+        if (user.metadata != null && user.metadata!.containsKey('class')) {
+          className = user.metadata!['class'] as String? ?? 'Unknown';
+        }
+
         return await getStudentDashboardData(
           studentId: user.id,
           studentName: user.name,
           className: className,
+          studentEmail: user.email, // ✅ PASS EMAIL
         );
+
       case 'parent':
-      // TODO: Get actual children data
+      // Get children data from user metadata if available
+        List<Map<String, dynamic>> children = [];
+        if (user.metadata != null && user.metadata!.containsKey('children')) {
+          children = List<Map<String, dynamic>>.from(
+              user.metadata!['children'] as List? ?? []
+          );
+        }
+
         return await getParentDashboardData(
           parentId: user.id,
-          children: [],
+          parentEmail: user.email, // ✅ PASS EMAIL
+          children: children,
         );
+
       default:
         return {};
     }

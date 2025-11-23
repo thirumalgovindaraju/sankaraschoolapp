@@ -1,4 +1,5 @@
 // lib/presentation/screens/dashboards/student_dashboard.dart
+// FIXED VERSION - Uses email for notification fetching
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../../widgets/dashboard/notification_badge.dart';
 import '../../../data/models/user_model.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../providers/attendance_provider.dart';
+
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({Key? key}) : super(key: key);
 
@@ -28,35 +30,30 @@ class _StudentDashboardState extends State<StudentDashboard> {
       _loadDashboardData();
     });
   }
-/*
+
+  /// Load all dashboard data
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
-    final userId = authProvider.currentUser?.id;
+    final user = authProvider.currentUser;
+
+    if (user == null) return;
+
+    final userId = user.id;
+    final userEmail = user.email; // ✅ GET EMAIL
+    final userRole = user.role?.name ?? 'student';
 
     await Future.wait([
-      context.read<AnnouncementProvider>().fetchAnnouncements(),
-      if (userId != null)
-        context.read<NotificationProvider>().fetchNotifications(userId),
-      if (userId != null)
-        context.read<AcademicProvider>().fetchAttendanceSummary(userId),
-    ]);
-  }
-*/
-  Future<void> _loadDashboardData() async {
-    final authProvider = context.read<AuthProvider>();
-    final userId = authProvider.currentUser?.id;
-    final userRole = authProvider.currentUser?.role?.name; // Get role
-
-    await Future.wait([
-      // ✅ Pass both userRole and userId to filter announcements
+      // ✅ Fetch announcements with role filtering
       context.read<AnnouncementProvider>().fetchAnnouncements(
-        userRole: userRole ?? 'student', // Provide default value
-        userId: userId,
+        userRole: userRole,
+        userId: userEmail, // Use email for announcements too
       ),
-      if (userId != null)
-        context.read<NotificationProvider>().fetchNotifications(userId),
-      if (userId != null)
-        context.read<AcademicProvider>().fetchAttendanceSummary(userId),
+
+      // ✅ CRITICAL FIX: Use email instead of ID for notifications
+      context.read<NotificationProvider>().fetchNotificationsForStudent(userEmail),
+
+      // ✅ Fetch attendance summary (still uses student ID)
+      context.read<AcademicProvider>().fetchAttendanceSummary(userId),
     ]);
   }
 
@@ -99,6 +96,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               // Quick Actions
               _buildQuickActions(context),
               const SizedBox(height: 20),
+
               // My Attendance Section
               Text(
                 'My Attendance',
@@ -107,7 +105,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 ),
               ),
               const SizedBox(height: 12),
-            Consumer2<AuthProvider, AttendanceProvider>(
+              Consumer2<AuthProvider, AttendanceProvider>(
                 builder: (context, authProvider, attendanceProvider, child) {
                   final userId = authProvider.currentUser?.id;
 
@@ -116,63 +114,43 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   }
 
                   return FutureBuilder(
-                      future: attendanceProvider.fetchAttendanceSummary(
-                        studentId: userId,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(24.0),
-                              child: Center(child: CircularProgressIndicator()),
-                            ),
-                          );
-                        }
-                        final summary = attendanceProvider.attendanceSummary;
-
-                        if (summary == null) {
-                          return const Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text('No attendance data available'),
-                            ),
-                          );
-                        }
-
-                        return AttendanceSummaryCard(
-                          attendancePercentage: summary.attendancePercentage,
-                          presentDays: summary.presentDays,
-                          totalDays: summary.totalDays,
-                          absentDays: summary.absentDays,
-                          isLoading: false,
-                          summary: summary,
-                          onTap: () => Navigator.pushNamed(context, '/attendance'),
+                    future: attendanceProvider.fetchAttendanceSummary(
+                      studentId: userId,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
                         );
-                      },
+                      }
+                      final summary = attendanceProvider.attendanceSummary;
+
+                      if (summary == null) {
+                        return const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('No attendance data available'),
+                          ),
+                        );
+                      }
+
+                      return AttendanceSummaryCard(
+                        attendancePercentage: summary.attendancePercentage,
+                        presentDays: summary.presentDays,
+                        totalDays: summary.totalDays,
+                        absentDays: summary.absentDays,
+                        isLoading: false,
+                        summary: summary,
+                        onTap: () => Navigator.pushNamed(context, '/attendance'),
+                      );
+                    },
                   );
                 },
-            ),
-
-              // Attendance Summary
-              if (attendanceSummary != null) ...[
-                Text(
-                  'My Attendance',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AttendanceSummaryCard(
-                  attendancePercentage: attendanceSummary.attendancePercentage,
-                  presentDays: attendanceSummary.presentDays,
-                  totalDays: attendanceSummary.totalDays,
-                  absentDays: attendanceSummary.absentDays,
-                  isLoading: false,
-                  summary: attendanceSummary,
-                  onTap: () => Navigator.pushNamed(context, '/attendance'),
-                ),
-                const SizedBox(height: 20),
-              ],
+              ),
+              const SizedBox(height: 20),
 
               // Academic Performance
               _buildAcademicPerformance(context),

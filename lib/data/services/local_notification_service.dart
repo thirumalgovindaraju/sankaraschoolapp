@@ -29,6 +29,36 @@ class LocalNotificationService {
     }
   }
 
+  Future<bool> createNotificationByEmail({
+    required String userEmail,
+    required String title,
+    required String message,
+    required String type,
+    String priority = 'medium',
+    String? relatedId,
+    String? relatedType,
+    Map<String, dynamic>? data,
+    String? actionUrl,
+    String? senderId,
+    String? senderName,
+    String? senderRole,
+  }) async {
+    // Use email as the userId
+    return await createNotification(
+      userId: userEmail,
+      title: title,
+      message: message,
+      type: type,
+      priority: priority,
+      relatedId: relatedId,
+      relatedType: relatedType,
+      data: data,
+      actionUrl: actionUrl,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+    );
+  }
   /// Get notifications for a specific user
   Future<List<NotificationModel>> getUserNotifications(
       String userId, {

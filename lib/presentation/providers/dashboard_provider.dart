@@ -217,6 +217,7 @@ class DashboardProvider extends ChangeNotifier {
     required String studentId,
     required String studentName,
     required String className,
+    required String studentEmail,  // ← ADD THIS
   }) async {
     _isLoading = true;
     _error = null;
@@ -227,6 +228,7 @@ class DashboardProvider extends ChangeNotifier {
         studentId: studentId,
         studentName: studentName,
         className: className,
+        studentEmail: studentEmail,  // ← PASS EMAIL
       );
 
       _dashboardData = data;

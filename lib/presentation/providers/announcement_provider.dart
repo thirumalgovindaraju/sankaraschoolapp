@@ -185,6 +185,9 @@ class AnnouncementProvider extends ChangeNotifier {
   // CREATE/UPDATE/DELETE METHODS
 
   // Create announcement (admin/teacher only)
+  // In announcement_provider.dart - UPDATE THIS METHOD ONLY
+
+// Create announcement (admin/teacher only)
   Future<bool> createAnnouncement({
     required String title,
     required String message,
@@ -197,16 +200,14 @@ class AnnouncementProvider extends ChangeNotifier {
     required String createdByRole,
     DateTime? expiryDate,
     List<String>? attachments,
+    bool sendNotifications = true, // NEW PARAMETER
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       final announcement = AnnouncementModel(
-        id: DateTime
-            .now()
-            .millisecondsSinceEpoch
-            .toString(),
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         message: message,
         type: type,
@@ -219,18 +220,22 @@ class AnnouncementProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
         expiryDate: expiryDate,
         attachments: _convertToAttachments(attachments),
-        // FIXED: Convert to Attachment objects
         readBy: [],
       );
 
-      final success = await _repository.createAnnouncement(announcement);
+      final success = await _repository.createAnnouncement(
+        announcement,
+        sendNotifications: sendNotifications, // Pass the parameter
+      );
 
       if (success) {
+        print('✅ Announcement created successfully with notifications');
         // Refresh announcements list
         await fetchAnnouncements(userRole: createdByRole);
       }
       return success;
     } catch (e) {
+      print('❌ Error in createAnnouncement provider: $e');
       _error = e.toString();
       return false;
     } finally {

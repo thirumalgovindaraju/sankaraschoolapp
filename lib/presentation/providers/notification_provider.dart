@@ -69,7 +69,29 @@ class NotificationProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  Future<void> fetchNotificationsForStudent(String studentEmail) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
+    try {
+      print('📥 Fetching notifications for student email: $studentEmail');
+      _notifications = await _localNotificationService.getUserNotifications(
+        studentEmail,  // Use email directly
+        limit: 50,
+      );
+      _unreadCount = await _localNotificationService.getUnreadCount(studentEmail);
+      _error = null;
+      print('✅ Fetched ${_notifications.length} notifications, $_unreadCount unread');
+    } catch (e) {
+      print('❌ Error fetching notifications: $e');
+      _error = e.toString();
+      _notifications = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
   /// Fetch unread notifications only
   Future<void> fetchUnreadNotifications(String userId) async {
     try {

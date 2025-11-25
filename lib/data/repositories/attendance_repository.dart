@@ -341,9 +341,9 @@ class AttendanceRepository {
     }
   }
 
-  // Get attendance statistics for class
+  // Get attendance statistics for class - FIXED: Make all parameters optional
   Future<Map<String, dynamic>> getClassAttendanceStatistics({
-    required String classId,
+    String? classId,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -369,9 +369,9 @@ class AttendanceRepository {
     }
   }
 
-  // Get students with low attendance
+  // Get students with low attendance - FIXED: Make classId optional
   Future<List<Map<String, dynamic>>> getStudentsWithLowAttendance({
-    required String classId,
+    String? classId,
     double threshold = 75.0,
   }) async {
     try {

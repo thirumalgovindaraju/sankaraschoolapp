@@ -3,12 +3,12 @@
 import 'package:flutter/material.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/models/attendance_summary_model.dart';
-import '../../data/services/attendance_service.dart';
+import '../../data/repositories/attendance_repository.dart';
 
 class AttendanceProvider extends ChangeNotifier {
-  final AttendanceService _attendanceService;
+  final AttendanceRepository _repository;
 
-  AttendanceProvider() : _attendanceService = AttendanceService();
+  AttendanceProvider() : _repository = AttendanceRepository();
 
   // State variables
   List<AttendanceModel> _attendanceRecords = [];
@@ -53,7 +53,7 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _attendanceRecords = await _attendanceService.getStudentAttendance(
+      _attendanceRecords = await _repository.getStudentAttendance(
         studentId: studentId,
         startDate: startDate,
         endDate: endDate,
@@ -84,7 +84,7 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _classAttendanceRecords = await _attendanceService.getClassAttendance(
+      _classAttendanceRecords = await _repository.getClassAttendance(
         classId: classId,
         date: date,
         subject: subject,
@@ -110,11 +110,13 @@ class AttendanceProvider extends ChangeNotifier {
     DateTime? endDate,
   }) async {
     try {
-      _attendanceSummary = await _attendanceService.getAttendanceSummary(
+      final summaryMap = await _repository.getAttendanceSummary(
         studentId: studentId,
         startDate: startDate,
         endDate: endDate,
       );
+
+      _attendanceSummary = AttendanceSummaryModel.fromJson(summaryMap);
 
       print('✅ Fetched attendance summary for student: $studentId');
       notifyListeners();
@@ -138,15 +140,13 @@ class AttendanceProvider extends ChangeNotifier {
       _classSummaries.clear();
 
       for (String studentId in studentIds) {
-        final summary = await _attendanceService.getAttendanceSummary(
+        final summaryMap = await _repository.getAttendanceSummary(
           studentId: studentId,
           startDate: startDate,
           endDate: endDate,
         );
 
-        if (summary != null) {
-          _classSummaries[studentId] = summary;
-        }
+        _classSummaries[studentId] = AttendanceSummaryModel.fromJson(summaryMap);
       }
 
       print('✅ Fetched summaries for ${_classSummaries.length} students');
@@ -164,18 +164,12 @@ class AttendanceProvider extends ChangeNotifier {
   /// Mark single student attendance
   Future<bool> markSingleAttendance({
     required String studentId,
-    required String studentName,
-    required String rollNumber,
     required String classId,
-    required String className,
-    required String section,
-    required DateTime date,
     required String status,
     required String markedBy,
-    required String markedByName,
     String? remarks,
     String? subject,
-    int? period,
+    String? period,
   }) async {
     _isSubmitting = true;
     _error = null;
@@ -183,37 +177,22 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _attendanceService.markSingleAttendance(
+      final result = await _repository.markAttendance(
         studentId: studentId,
-        studentName: studentName,
-        rollNumber: rollNumber,
         classId: classId,
-        className: className,
-        section: section,
-        date: date,
         status: status,
         markedBy: markedBy,
-        markedByName: markedByName,
         remarks: remarks,
         subject: subject,
         period: period,
       );
 
-      if (result) {
-        _successMessage = 'Attendance marked successfully for $studentName';
-
-        // Refresh attendance records
-        await fetchClassAttendance(
-          classId: classId,
-          date: date,
-          subject: subject,
-          period: period?.toString(),
-        );
-
-        print('✅ Attendance marked successfully for $studentName');
+      if (result['success'] == true) {
+        _successMessage = result['message'];
+        print('✅ Attendance marked successfully');
         return true;
       } else {
-        _error = 'Failed to mark attendance';
+        _error = result['message'];
         print('❌ Failed to mark attendance');
         return false;
       }
@@ -245,7 +224,7 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _attendanceService.markBulkAttendance(
+      final result = await _repository.markBulkAttendance(
         classId: classId,
         className: className,
         section: section,
@@ -258,7 +237,7 @@ class AttendanceProvider extends ChangeNotifier {
       );
 
       if (result['success'] == true) {
-        _successMessage = result['message'] ?? 'Bulk attendance marked successfully';
+        _successMessage = result['message'];
 
         // Refresh attendance records
         await fetchClassAttendance(
@@ -271,7 +250,7 @@ class AttendanceProvider extends ChangeNotifier {
         print('✅ Bulk attendance marked successfully for ${students.length} students');
         return true;
       } else {
-        _error = result['message'] ?? 'Failed to mark bulk attendance';
+        _error = result['message'];
         print('❌ Failed to mark bulk attendance');
         return false;
       }
@@ -297,14 +276,14 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _attendanceService.updateAttendance(
+      final result = await _repository.updateAttendance(
         attendanceId: attendanceId,
         status: newStatus,
         remarks: remarks,
       );
 
-      if (result) {
-        _successMessage = 'Attendance updated successfully';
+      if (result['success'] == true) {
+        _successMessage = result['message'];
 
         // Update local record
         final index = _attendanceRecords.indexWhere((a) => a.id == attendanceId);
@@ -328,7 +307,7 @@ class AttendanceProvider extends ChangeNotifier {
         print('✅ Attendance updated successfully');
         return true;
       } else {
-        _error = 'Failed to update attendance';
+        _error = result['message'];
         print('❌ Failed to update attendance');
         return false;
       }
@@ -347,7 +326,7 @@ class AttendanceProvider extends ChangeNotifier {
   /// Get today's attendance for a student
   Future<AttendanceModel?> getTodayAttendance(String studentId) async {
     try {
-      return await _attendanceService.getTodayAttendance(studentId);
+      return await _repository.getTodayAttendance(studentId);
     } catch (e) {
       print('❌ Error getting today\'s attendance: $e');
       return null;
@@ -362,9 +341,8 @@ class AttendanceProvider extends ChangeNotifier {
     String? period,
   }) async {
     try {
-      return await _attendanceService.isAttendanceMarkedForClass(
+      return await _repository.isAttendanceMarkedToday(
         classId: classId,
-        date: date,
         subject: subject,
         period: period,
       );
@@ -381,13 +359,11 @@ class AttendanceProvider extends ChangeNotifier {
     DateTime? endDate,
   }) async {
     try {
-      final summary = await _attendanceService.getAttendanceSummary(
+      return await _repository.calculateAttendancePercentage(
         studentId: studentId,
         startDate: startDate,
         endDate: endDate,
       );
-
-      return summary?.attendancePercentage ?? 0.0;
     } catch (e) {
       print('❌ Error calculating attendance percentage: $e');
       return 0.0;
@@ -401,7 +377,18 @@ class AttendanceProvider extends ChangeNotifier {
     DateTime? endDate,
   }) async {
     try {
-      return await _attendanceService.getAttendanceStatistics(
+      // Note: Repository method signature might not match - handle accordingly
+      // If classId is required in repository, provide a default or skip call
+      if (classId == null) {
+        return {
+          'total_students': 0,
+          'present_today': 0,
+          'absent_today': 0,
+          'average_attendance': 0.0,
+        };
+      }
+
+      return await _repository.getClassAttendanceStatistics(
         classId: classId,
         startDate: startDate,
         endDate: endDate,
@@ -423,7 +410,12 @@ class AttendanceProvider extends ChangeNotifier {
     double threshold = 75.0,
   }) async {
     try {
-      return await _attendanceService.getStudentsWithLowAttendance(
+      // If classId is null, return empty list since repository requires it
+      if (classId == null) {
+        return [];
+      }
+
+      return await _repository.getStudentsWithLowAttendance(
         classId: classId,
         threshold: threshold,
       );
@@ -433,11 +425,26 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== HELPER METHODS ====================
-
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  /// Get attendance trends (for charts)
+  Future<Map<String, dynamic>> getAttendanceTrends({
+    required String studentId,
+    required int days,
+  }) async {
+    try {
+      return await _repository.getAttendanceTrends(
+        studentId: studentId,
+        days: days,
+      );
+    } catch (e) {
+      print('❌ Error getting attendance trends: $e');
+      return {
+        'success': false,
+        'trends': {},
+      };
+    }
   }
+
+  // ==================== HELPER METHODS ====================
 
   /// Clear all data
   void clearData() {

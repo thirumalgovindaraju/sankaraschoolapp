@@ -27,6 +27,18 @@ class StudentModel {
     required this.parentDetails,
   });
 
+  //----------------------------------------------------------
+  //   // ✅ Added Getters (Fixes "getter 'currentClass' not defined")
+  //   // ----------------------------------------------------------
+  //
+  //   /// Allows your UI code to continue using student.currentClass
+  String get currentClass => className;
+  //
+  //   /// Useful if any screen/provider filters by combined class-section
+  String get classId => '$className-$section';
+  //
+  //   // ----------------------------------------------------------
+
   factory StudentModel.fromJson(Map<String, dynamic> json) {
     return StudentModel(
       // Handle student_id - ensure it's always a String

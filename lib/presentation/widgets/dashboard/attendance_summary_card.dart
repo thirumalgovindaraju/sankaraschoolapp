@@ -1,4 +1,5 @@
 // lib/presentation/widgets/dashboard/attendance_summary_card.dart
+// FIXED VERSION - Null safety handled properly
 
 import 'package:flutter/material.dart';
 import '../../../data/models/attendance_summary_model.dart';
@@ -26,127 +27,172 @@ class AttendanceSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ FIXED: Just show loading state, don't trigger any fetches
     if (isLoading) {
-      return const Card(
+      return Card(
+        elevation: 2,
         child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Center(child: CircularProgressIndicator()),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text(
+                'Loading attendance...',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
+    // ✅ FIXED: Show empty state without triggering fetches
     if (summary == null) {
-      return const Card(
+      return Card(
+        elevation: 2,
         child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Center(child: Text('No attendance data available')),
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No attendance data available',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
+
+    // ✅ Now we know summary is not null, safe to use!
+    final data = summary!;
 
     return Card(
       elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Attendance Summary',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getPercentageColor(summary!.attendancePercentage)
-                        .withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${summary!.attendancePercentage.toStringAsFixed(1)}%',
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Attendance Summary',
                     style: TextStyle(
-                      color: _getPercentageColor(summary!.attendancePercentage),
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    'Present',
-                    summary!.presentDays.toString(),
-                    AppColors.present,
-                    Icons.check_circle,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getPercentageColor(data.attendancePercentage)
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${data.attendancePercentage.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: _getPercentageColor(data.attendancePercentage),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    'Absent',
-                    summary!.absentDays.toString(),
-                    AppColors.absent,
-                    Icons.cancel,
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      'Present',
+                      data.presentDays.toString(),
+                      AppColors.present,
+                      Icons.check_circle,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    'Late',
-                    summary!.lateDays.toString(),
-                    AppColors.late,
-                    Icons.access_time,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatItem(
+                      'Absent',
+                      data.absentDays.toString(),
+                      AppColors.absent,
+                      Icons.cancel,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    'Excused',
-                    summary!.excusedDays.toString(),
-                    AppColors.excused,
-                    Icons.event_note,
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      'Late',
+                      data.lateDays.toString(),
+                      AppColors.late,
+                      Icons.access_time,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total Days',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatItem(
+                      'Excused',
+                      data.excusedDays.toString(),
+                      AppColors.excused,
+                      Icons.event_note,
+                    ),
                   ),
-                ),
-                Text(
-                  summary!.totalDays.toString(),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Total Days',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  Text(
+                    data.totalDays.toString(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -171,12 +217,14 @@ class AttendanceSummaryCard extends StatelessWidget {
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: color,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],

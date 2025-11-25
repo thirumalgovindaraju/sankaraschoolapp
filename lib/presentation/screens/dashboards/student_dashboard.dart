@@ -39,9 +39,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
     if (user == null) return;
 
     final userId = user.id;
-    final userEmail = user.email; // ✅ GET EMAIL
+    final userEmail = user.email; // ✅ FIXED: Changed from 'mail' to 'userEmail'
     final userRole = user.role?.name ?? 'student';
-
 
     await Future.wait([
       // ✅ Fetch announcements with role filtering

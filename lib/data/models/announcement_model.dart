@@ -1,28 +1,31 @@
 // lib/data/models/announcement_model.dart
+// FIXED VERSION - All type errors resolved
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AnnouncementModel {
   final String id;
   final String title;
   final String message;
-  final String type; // 'academic', 'general', 'urgent', 'event', 'holiday'
-  final String priority; // 'high', 'medium', 'low'
-  final String createdBy; // User ID who created
-  final String createdByName; // Name of creator
-  final String createdByRole; // 'admin', 'teacher'
-  final List<String> targetAudience; // ['student', 'parent', 'teacher', 'all']
-  final List<String> targetClasses; // Specific classes if applicable
-  final List<String>? targetStudents; // Specific students if applicable
+  final String type;
+  final String priority;
+  final String createdBy;
+  final String createdByName;
+  final String createdByRole;
+  final List<String> targetAudience;
+  final List<String> targetClasses;
+  final List<String>? targetStudents;
   final DateTime createdAt;
-  final DateTime? updatedAt; // Added for update tracking
+  final DateTime? updatedAt;
   final DateTime? expiryDate;
   final bool isActive;
-  final bool isPinned; // Added for pinned announcements
+  final bool isPinned;
   final String? attachmentUrl;
   final String? attachmentName;
-  final List<Attachment> attachments; // Changed to List<Attachment> for better structure
-  final Map<String, dynamic>? metadata; // Additional data
+  final List<Attachment> attachments;
+  final Map<String, dynamic>? metadata;
   final int readCount;
-  final List<String> readBy; // User IDs who have read
+  final List<String> readBy;
 
   AnnouncementModel({
     required this.id,
@@ -49,12 +52,15 @@ class AnnouncementModel {
     this.readBy = const [],
   });
 
-  // Getters for backward compatibility with AnnouncementDetailScreen
-  String get content => message; // Maps message to content
-  String get category => type; // Maps type to category
-  String get createdById => createdBy; // createdBy is already the user ID
+  // Getters for backward compatibility
+  String get content => message;
+  String get category => type;
+  String get createdById => createdBy;
 
-  // From JSON
+  // ============================================================================
+  // FROM JSON - FIXED: All type errors resolved
+  // ============================================================================
+
   factory AnnouncementModel.fromJson(Map<String, dynamic> json) {
     return AnnouncementModel(
       id: json['id'] ?? '',
@@ -62,47 +68,152 @@ class AnnouncementModel {
       message: json['message'] ?? '',
       type: json['type'] ?? 'general',
       priority: json['priority'] ?? 'medium',
-      createdBy: json['created_by'] ?? '',
-      createdByName: json['created_by_name'] ?? '',
-      createdByRole: json['created_by_role'] ?? '',
-      targetAudience: List<String>.from(json['target_audience'] ?? ['all']),
-      targetClasses: json['target_classes'] != null
-          ? List<String>.from(json['target_classes'])
-          : [],
-      targetStudents: json['target_students'] != null
-          ? List<String>.from(json['target_students'])
-          : null,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
-          : DateTime.now(),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'])
-          : null,
-      expiryDate: json['expiry_date'] != null
-          ? DateTime.parse(json['expiry_date'])
-          : null,
-      isActive: json['is_active'] ?? true,
-      isPinned: json['is_pinned'] ?? false,
-      attachmentUrl: json['attachment_url'],
-      attachmentName: json['attachment_name'],
-      attachments: json['attachments'] != null
-          ? (json['attachments'] as List)
-          .map((a) => a is String
-          ? Attachment(
-        id: a,
-        name: json['attachment_name'] ?? 'Attachment',
-        url: a,
-      )
-          : Attachment.fromJson(a))
-          .toList()
-          : [],
+
+      createdBy: json['createdBy'] ?? json['created_by'] ?? '',
+      createdByName: json['createdByName'] ?? json['created_by_name'] ?? '',
+      createdByRole: json['createdByRole'] ?? json['created_by_role'] ?? '',
+
+      // ✅ FIXED: Returns non-nullable List<String>
+      targetAudience: _parseStringList(
+        json['targetAudience'] ?? json['target_audience'],
+        defaultValue: ['all'],
+      ) ?? ['all'], // Double safety
+
+      // ✅ FIXED: Returns non-nullable List<String>
+      targetClasses: _parseStringList(
+        json['targetClasses'] ?? json['target_classes'],
+        defaultValue: [],
+      ) ?? [], // Double safety
+
+      // ✅ This one is nullable, so it's fine
+      targetStudents: _parseStringList(
+        json['targetStudents'] ?? json['target_students'],
+        defaultValue: null,
+      ),
+
+      createdAt: _parseDateTime(json['createdAt'] ?? json['created_at']),
+      updatedAt: _parseDateTime(json['updatedAt'] ?? json['updated_at']),
+      expiryDate: _parseDateTime(json['expiryDate'] ?? json['expiry_date']),
+
+      isActive: json['isActive'] ?? json['is_active'] ?? true,
+      isPinned: json['isPinned'] ?? json['is_pinned'] ?? false,
+
+      attachmentUrl: json['attachmentUrl'] ?? json['attachment_url'],
+      attachmentName: json['attachmentName'] ?? json['attachment_name'],
+
+      attachments: _parseAttachments(
+        json['attachments'],
+        fallbackName: json['attachmentName'] ?? json['attachment_name'],
+      ),
+
       metadata: json['metadata'],
-      readCount: json['read_count'] ?? 0,
-      readBy: List<String>.from(json['read_by'] ?? []),
+      readCount: json['readCount'] ?? json['read_count'] ?? 0,
+
+      // ✅ FIXED: Returns non-nullable List<String>
+      readBy: _parseStringList(
+        json['readBy'] ?? json['read_by'],
+        defaultValue: [],
+      ) ?? [], // Double safety
     );
   }
 
-  // To JSON
+  // ============================================================================
+  // HELPER METHODS - FIXED: Better null handling
+  // ============================================================================
+
+  /// Parse field that can be String, List, or null
+  /// Returns List<String>? to allow null for optional fields
+  static List<String>? _parseStringList(dynamic value, {required List<String>? defaultValue}) {
+    if (value == null) return defaultValue;
+
+    // If it's already a List
+    if (value is List) {
+      try {
+        return value.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+      } catch (e) {
+        print('⚠️ Error parsing list: $e');
+        return defaultValue;
+      }
+    }
+
+    // If it's a String, convert to single-item list
+    if (value is String) {
+      if (value.isEmpty) return defaultValue;
+      // Check if it's a comma-separated string
+      if (value.contains(',')) {
+        return value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      }
+      return [value];
+    }
+
+    return defaultValue;
+  }
+
+  /// Parse DateTime from various formats
+  static DateTime _parseDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+
+    // Firestore Timestamp
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    // ISO String
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+
+    // Milliseconds since epoch
+    if (value is int) {
+      try {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+
+    return DateTime.now();
+  }
+
+  /// Parse attachments safely
+  static List<Attachment> _parseAttachments(dynamic value, {String? fallbackName}) {
+    if (value == null) return [];
+    if (value is! List) return [];
+
+    try {
+      return value.map((item) {
+        if (item is String) {
+          return Attachment(
+            id: item,
+            name: fallbackName ?? 'Attachment',
+            url: item,
+          );
+        }
+
+        if (item is Map<String, dynamic>) {
+          return Attachment.fromJson(item);
+        }
+
+        return Attachment(
+          id: item.toString(),
+          name: fallbackName ?? 'Attachment',
+          url: item.toString(),
+        );
+      }).toList();
+    } catch (e) {
+      print('⚠️ Error parsing attachments: $e');
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // TO JSON
+  // ============================================================================
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -130,7 +241,10 @@ class AnnouncementModel {
     };
   }
 
-  // Copy with
+  // ============================================================================
+  // COPY WITH
+  // ============================================================================
+
   AnnouncementModel copyWith({
     String? id,
     String? title,
@@ -181,18 +295,19 @@ class AnnouncementModel {
     );
   }
 
-  // Check if announcement is expired
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
   bool get isExpired {
     if (expiryDate == null) return false;
     return DateTime.now().isAfter(expiryDate!);
   }
 
-  // Check if user has read the announcement
   bool isReadBy(String userId) {
     return readBy.contains(userId);
   }
 
-  // Get priority color
   String get priorityColor {
     switch (priority) {
       case 'high':
@@ -206,7 +321,6 @@ class AnnouncementModel {
     }
   }
 
-  // Get type icon
   String get typeIcon {
     switch (type) {
       case 'academic':
@@ -223,12 +337,15 @@ class AnnouncementModel {
   }
 }
 
-// Attachment model
+// ============================================================================
+// ATTACHMENT MODEL
+// ============================================================================
+
 class Attachment {
   final String id;
   final String name;
   final String url;
-  final int? size; // in bytes
+  final int? size;
   final String? type;
 
   Attachment({

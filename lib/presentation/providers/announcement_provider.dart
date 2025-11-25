@@ -1,4 +1,6 @@
 // lib/presentation/providers/announcement_provider.dart
+// FIXED VERSION - Proper refresh logic
+
 import 'package:flutter/material.dart';
 import '../../data/models/announcement_model.dart';
 import '../../data/repositories/announcement_repository.dart';
@@ -20,19 +22,12 @@ class AnnouncementProvider extends ChangeNotifier {
 
   // Getters
   List<AnnouncementModel> get announcements => _announcements;
-
   List<AnnouncementModel> get urgentAnnouncements => _urgentAnnouncements;
-
   List<AnnouncementModel> get recentAnnouncements => _recentAnnouncements;
-
   int get unreadCount => _unreadCount;
-
   bool get isLoading => _isLoading;
-
   String? get error => _error;
-
   String? get selectedType => _selectedType;
-
   bool get showOnlyUnread => _showOnlyUnread;
 
   // Filtered announcements based on current filters
@@ -50,57 +45,27 @@ class AnnouncementProvider extends ChangeNotifier {
     return filtered;
   }
 
-  // Helper to check if announcement is read by checking readBy list
   bool _isAnnouncementRead(AnnouncementModel announcement) {
-    // This will be checked against current user ID in actual implementation
     return announcement.readBy.isNotEmpty;
   }
 
-  // Helper to convert List<String> attachments to List<Attachment>
   List<Attachment> _convertToAttachments(List<String>? attachmentUrls) {
     if (attachmentUrls == null || attachmentUrls.isEmpty) return [];
 
     return attachmentUrls.map((url) {
       return Attachment(
-        id: DateTime
-            .now()
-            .millisecondsSinceEpoch
-            .toString(),
-        name: url
-            .split('/')
-            .last,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: url.split('/').last,
         url: url,
       );
     }).toList();
   }
 
-  // FETCH METHODS
+  // ============================================================================
+  // FETCH METHODS - FIXED
+  // ============================================================================
 
-  // Fetch all announcements
-  /*
-  Future<void> fetchAnnouncements({String? userRole, String? userId}) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _announcements = await _repository.getAnnouncements(
-        userRole: userRole ?? '',
-        userId: userId,
-      );
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-      _announcements = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-*/
-  // In your AnnouncementProvider class
-  // In announcement_provider.dart
-  // In announcement_provider.dart
+  /// Fetch all announcements with proper error handling
   Future<void> fetchAnnouncements({
     required String userRole,
     String? userId,
@@ -110,20 +75,28 @@ class AnnouncementProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('📥 Fetching announcements for role: $userRole');
+      print('📥 [PROVIDER] Fetching announcements for role: $userRole');
 
-      _announcements = await _repository.getAnnouncements(
+      final announcements = await _repository.getAnnouncements(
         userRole: userRole,
         userId: userId,
         activeOnly: true,
         limit: 50,
       );
 
-      print('✅ Fetched ${_announcements
-          .length} announcements for role: $userRole');
+      _announcements = announcements;
+      print('✅ [PROVIDER] Fetched ${_announcements.length} announcements');
+
+      // Log sample for debugging
+      if (_announcements.isNotEmpty) {
+        print('📋 Sample announcement:');
+        print('   - Title: ${_announcements.first.title}');
+        print('   - Target: ${_announcements.first.targetAudience}');
+      }
+
       _error = null;
     } catch (e) {
-      print('❌ Error fetching announcements: $e');
+      print('❌ [PROVIDER] Error fetching announcements: $e');
       _error = e.toString();
       _announcements = [];
     } finally {
@@ -132,22 +105,29 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch recent announcements (for dashboard)
-  Future<void> fetchRecentAnnouncements(
-      {String? userRole, int limit = 5}) async {
+  /// Fetch recent announcements (for dashboard)
+  Future<void> fetchRecentAnnouncements({
+    String? userRole,
+    int limit = 5,
+  }) async {
     try {
+      print('📥 [PROVIDER] Fetching recent announcements for role: $userRole');
+
       _recentAnnouncements = await _repository.getRecentAnnouncements(
         userRole: userRole,
         limit: limit,
       );
+
+      print('✅ [PROVIDER] Fetched ${_recentAnnouncements.length} recent announcements');
       notifyListeners();
     } catch (e) {
+      print('❌ [PROVIDER] Error fetching recent announcements: $e');
       _error = e.toString();
       notifyListeners();
     }
   }
 
-  // Fetch urgent announcements
+  /// Fetch urgent announcements
   Future<void> fetchUrgentAnnouncements({String? userRole}) async {
     try {
       _urgentAnnouncements = await _repository.getUrgentAnnouncements(
@@ -160,7 +140,7 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch single announcement by ID
+  /// Fetch single announcement by ID
   Future<AnnouncementModel?> fetchAnnouncementById(String id) async {
     try {
       return await _repository.getAnnouncementById(id);
@@ -171,7 +151,7 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch unread count
+  /// Fetch unread count
   Future<void> fetchUnreadCount(String userId) async {
     try {
       _unreadCount = await _repository.getUnreadCount(userId);
@@ -182,12 +162,11 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // CREATE/UPDATE/DELETE METHODS
+  // ============================================================================
+  // CREATE/UPDATE/DELETE METHODS - FIXED
+  // ============================================================================
 
-  // Create announcement (admin/teacher only)
-  // In announcement_provider.dart - UPDATE THIS METHOD ONLY
-
-// Create announcement (admin/teacher only)
+  /// Create announcement with automatic refresh
   Future<bool> createAnnouncement({
     required String title,
     required String message,
@@ -200,12 +179,16 @@ class AnnouncementProvider extends ChangeNotifier {
     required String createdByRole,
     DateTime? expiryDate,
     List<String>? attachments,
-    bool sendNotifications = true, // NEW PARAMETER
+    bool sendNotifications = true,
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
+      print('📤 [PROVIDER] Creating announcement...');
+      print('   Title: $title');
+      print('   Target Audience: $targetAudience');
+
       final announcement = AnnouncementModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
@@ -225,17 +208,22 @@ class AnnouncementProvider extends ChangeNotifier {
 
       final success = await _repository.createAnnouncement(
         announcement,
-        sendNotifications: sendNotifications, // Pass the parameter
+        sendNotifications: sendNotifications,
       );
 
       if (success) {
-        print('✅ Announcement created successfully with notifications');
-        // Refresh announcements list
-        await fetchAnnouncements(userRole: createdByRole);
+        print('✅ [PROVIDER] Announcement created successfully');
+
+        // ✅ IMPORTANT: Refresh announcements immediately after creation
+        await fetchAnnouncements(
+          userRole: createdByRole,
+          userId: createdBy,
+        );
       }
+
       return success;
     } catch (e) {
-      print('❌ Error in createAnnouncement provider: $e');
+      print('❌ [PROVIDER] Error in createAnnouncement: $e');
       _error = e.toString();
       return false;
     } finally {
@@ -244,7 +232,7 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Update announcement
+  /// Update announcement
   Future<bool> updateAnnouncement({
     required String id,
     required String title,
@@ -260,7 +248,6 @@ class AnnouncementProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Find existing announcement to preserve some fields
       final existingIndex = _announcements.indexWhere((a) => a.id == id);
       if (existingIndex == -1) {
         _error = 'Announcement not found';
@@ -282,7 +269,6 @@ class AnnouncementProvider extends ChangeNotifier {
         createdAt: existing.createdAt,
         expiryDate: expiryDate,
         attachments: _convertToAttachments(attachments),
-        // FIXED: Convert to Attachment objects
         readBy: existing.readBy,
       );
 
@@ -292,7 +278,6 @@ class AnnouncementProvider extends ChangeNotifier {
       );
 
       if (success) {
-        // Update local list
         _announcements[existingIndex] = updatedAnnouncement;
       }
       return success;
@@ -305,7 +290,7 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Delete announcement
+  /// Delete announcement
   Future<bool> deleteAnnouncement(String id) async {
     _isLoading = true;
     notifyListeners();
@@ -328,7 +313,7 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Mark announcement as read
+  /// Mark announcement as read
   Future<bool> markAsRead(String announcementId, String userId) async {
     try {
       final success = await _repository.markAsRead(
@@ -337,12 +322,10 @@ class AnnouncementProvider extends ChangeNotifier {
       );
 
       if (success) {
-        // Update local lists
         _updateReadStatusInList(_announcements, announcementId, userId);
         _updateReadStatusInList(_recentAnnouncements, announcementId, userId);
         _updateReadStatusInList(_urgentAnnouncements, announcementId, userId);
 
-        // Decrease unread count
         if (_unreadCount > 0) _unreadCount--;
 
         notifyListeners();
@@ -355,10 +338,11 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Helper method to update read status in a list
-  void _updateReadStatusInList(List<AnnouncementModel> list,
+  void _updateReadStatusInList(
+      List<AnnouncementModel> list,
       String announcementId,
-      String userId,) {
+      String userId,
+      ) {
     final index = list.indexWhere((a) => a.id == announcementId);
     if (index != -1) {
       final announcement = list[index];
@@ -381,9 +365,10 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
+  // ============================================================================
   // SEARCH AND FILTER METHODS
+  // ============================================================================
 
-  // Search announcements
   Future<void> searchAnnouncements(String query, {String? userRole}) async {
     _isLoading = true;
     _error = null;
@@ -404,7 +389,6 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Get announcements by type
   Future<void> fetchAnnouncementsByType(String type, {String? userRole}) async {
     _isLoading = true;
     _error = null;
@@ -425,8 +409,8 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Get announcements by date range
-  Future<void> fetchAnnouncementsByDateRange(DateTime startDate,
+  Future<void> fetchAnnouncementsByDateRange(
+      DateTime startDate,
       DateTime endDate, {
         String? userRole,
       }) async {
@@ -450,40 +434,34 @@ class AnnouncementProvider extends ChangeNotifier {
     }
   }
 
-  // Set filter type
   void setFilterType(String? type) {
     _selectedType = type;
     notifyListeners();
   }
 
-  // Toggle show only unread
   void toggleShowOnlyUnread() {
     _showOnlyUnread = !_showOnlyUnread;
     notifyListeners();
   }
 
-  // Clear filters
   void clearFilters() {
     _selectedType = null;
     _showOnlyUnread = false;
     notifyListeners();
   }
 
+  // ============================================================================
   // UTILITY METHODS
+  // ============================================================================
 
-  // Check if there are unread announcements
   bool hasUnreadAnnouncements() {
     return _unreadCount > 0;
   }
 
-  // Get announcements count by type
   int getCountByType(String type) {
-    return _announcements
-        .where((a) => a.type == type)
-        .length;
+    return _announcements.where((a) => a.type == type).length;
   }
 
-  // Get active announcements (not expired)
   List<AnnouncementModel> getActiveAnnouncements() {
     final now = DateTime.now();
     return _announcements.where((a) {
@@ -492,7 +470,6 @@ class AnnouncementProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // Clear all data
   void clearData() {
     _announcements = [];
     _urgentAnnouncements = [];
@@ -504,9 +481,8 @@ class AnnouncementProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Refresh all data
+  /// Refresh all data
   Future<void> refreshAll({String? userRole, String? userId}) async {
-    // Provide default userRole if null
     final role = userRole ?? 'student';
 
     await Future.wait([

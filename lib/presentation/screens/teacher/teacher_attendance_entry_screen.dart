@@ -1,5 +1,5 @@
 // lib/presentation/screens/teacher/teacher_attendance_entry_screen.dart
-// FIXED VERSION - All errors resolved
+// UPDATED VERSION - Matches test_data.json structure
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +7,7 @@ import '../../../data/models/attendance_model.dart';
 import '../../../data/models/student_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/student_provider.dart'; // ✅ FIXED: Use StudentProvider instead
+import '../../providers/student_provider.dart';
 
 class TeacherAttendanceEntryScreen extends StatefulWidget {
   const TeacherAttendanceEntryScreen({Key? key}) : super(key: key);
@@ -28,10 +28,10 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
   bool _isLoading = false;
   bool _hasLoadedStudents = false;
 
-  // Available classes and sections
+  // ✅ UPDATED: Match test_data.json structure (Pre-KG to 10th)
   final List<String> _classes = [
-    'Pre-KG', 'LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th',
-    '6th', '7th', '8th', '9th', '10th', '11th', '12th'
+    'Pre-KG', 'LKG', 'UKG', '1', '2', '3', '4', '5',
+    '6', '7', '8', '9', '10'
   ];
   final List<String> _sections = ['A', 'B'];
   final List<int> _periods = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -43,12 +43,11 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
   }
 
   void _initializeDefaults() {
-    // Set default class to Pre-KG-A
+    // Set default class to Pre-KG-A (first class in test_data.json)
     _selectedClass = 'Pre-KG';
     _selectedSection = 'A';
   }
 
-  // ✅ FIXED: Use StudentProvider to load students
   Future<void> _loadStudents() async {
     if (_selectedClass == null || _selectedSection == null) return;
 
@@ -67,12 +66,24 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
       final classId = '$_selectedClass-$_selectedSection';
       final allStudents = studentProvider.allStudents ?? [];
 
+      print('🔍 Filtering students for class: $_selectedClass, section: $_selectedSection');
 
-      // ✅ FIXED: Filter students correctly
+      // Filter students correctly matching test_data.json structure
       _students = allStudents.where((student) {
-        return student.currentClass == _selectedClass &&
-            student.section == _selectedSection;
+        final matchesClass = student.currentClass == _selectedClass;
+        final matchesSection = student.section == _selectedSection;
+
+        if (matchesClass && matchesSection) {
+          print('✅ Found student: ${student.name} in $_selectedClass-$_selectedSection');
+        }
+
+        return matchesClass && matchesSection;
       }).toList();
+
+      // Sort by roll number
+      _students.sort((a, b) => a.rollNumber.compareTo(b.rollNumber));
+
+      print('📊 Total students found: ${_students.length}');
 
       setState(() {
         _hasLoadedStudents = true;
@@ -80,7 +91,6 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
         // Initialize all students as present by default
         _attendanceStatus.clear();
         for (var student in _students) {
-          // ✅ FIXED: Use studentId instead of id
           _attendanceStatus[student.studentId] = 'present';
         }
       });
@@ -110,6 +120,7 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
         );
       }
     } catch (e) {
+      print('❌ Error loading students: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading students: $e')),
@@ -182,13 +193,12 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
     try {
       final attendanceProvider = context.read<AttendanceProvider>();
 
-      // ✅ FIXED: Create student attendance entries with correct property names
       final studentEntries = _students.map((student) {
         return StudentAttendanceEntry(
-          studentId: student.studentId, // ✅ FIXED: Use studentId
+          studentId: student.studentId,
           studentName: student.name,
           rollNumber: student.rollNumber.toString(),
-          status: _attendanceStatus[student.studentId] ?? 'present', // ✅ FIXED
+          status: _attendanceStatus[student.studentId] ?? 'present',
         );
       }).toList();
 
@@ -236,7 +246,7 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
   void _markAllPresent() {
     setState(() {
       for (var student in _students) {
-        _attendanceStatus[student.studentId] = 'present'; // ✅ FIXED
+        _attendanceStatus[student.studentId] = 'present';
       }
     });
   }
@@ -244,7 +254,7 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
   void _markAllAbsent() {
     setState(() {
       for (var student in _students) {
-        _attendanceStatus[student.studentId] = 'absent'; // ✅ FIXED
+        _attendanceStatus[student.studentId] = 'absent';
       }
     });
   }
@@ -483,7 +493,6 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
                 padding: const EdgeInsets.all(16),
                 itemBuilder: (context, index) {
                   final student = _students[index];
-                  // ✅ FIXED: Use studentId
                   final currentStatus = _attendanceStatus[student.studentId] ?? 'present';
 
                   return Card(
@@ -505,7 +514,7 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      subtitle: Text('Roll No: ${student.rollNumber}'),
+                      subtitle: Text('Roll No: ${student.rollNumber} • Class: ${student.currentClass}-${student.section}'),
                       trailing: DropdownButton<String>(
                         value: currentStatus,
                         underline: const SizedBox(),
@@ -554,7 +563,6 @@ class _TeacherAttendanceEntryScreenState extends State<TeacherAttendanceEntryScr
                         onChanged: (value) {
                           if (value != null) {
                             setState(() {
-                              // ✅ FIXED: Use studentId
                               _attendanceStatus[student.studentId] = value;
                             });
                           }

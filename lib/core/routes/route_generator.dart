@@ -32,7 +32,7 @@ import '../../presentation/screens/announcements/announcements_list_screen.dart'
 import '../../presentation/screens/announcements/announcement_detail_screen.dart';
 import '../../presentation/screens/announcements/edit_announcement_screen.dart';
 import '../../data/models/announcement_model.dart';
-import '../../presentation/screens/academic/teacher_attendance_entry_screen.dart';
+import '../../presentation/screens/teacher/teacher_attendance_entry_screen.dart';
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {

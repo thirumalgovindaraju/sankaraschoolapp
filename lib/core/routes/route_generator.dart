@@ -33,6 +33,7 @@ import '../../presentation/screens/announcements/announcement_detail_screen.dart
 import '../../presentation/screens/announcements/edit_announcement_screen.dart';
 import '../../data/models/announcement_model.dart';
 import '../../presentation/screens/teacher/teacher_attendance_entry_screen.dart';
+import '../../presentation/screens/auth/forgot_password_screen.dart';
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -46,6 +47,9 @@ class RouteGenerator {
 
       case '/register':
         return MaterialPageRoute(builder: (_) => const RegisterScreen());
+
+      case '/forgot-password':
+        return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
 
       case '/debug-users':
         return MaterialPageRoute(builder: (_) => const DebugUsersScreen());
@@ -305,6 +309,7 @@ class Routes {
   static const String root = '/';
   static const String login = '/login';
   static const String register = '/register';
+  static const String forgotPassword = '/forgot-password';
   static const String debugUsers = '/debug-users';
 
   // Dashboard Routes

@@ -14,6 +14,8 @@ import '../../widgets/dashboard/notification_badge.dart';
 import '../../widgets/common/custom_drawer.dart';
 import '../../widgets/dashboard/realtime_attendance_widget.dart';
 import '../../providers/attendance_provider.dart';
+import '/data/services/admin_service.dart';
+import '/data/services/api_service.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -203,6 +205,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildExecutiveWelcomeCard(user),
+                // ✅ ADD THIS LINE:
+                _buildPendingApprovalsCard(context),
                 Container(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -370,7 +374,106 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       ),
     );
   }
+  // ✅ ADD THIS NEW METHOD (around line 270)
+  Widget _buildPendingApprovalsCard(BuildContext context) {
+    return FutureBuilder<int>(
+      future: AdminService(ApiService()).getPendingApprovalsCount(),
+      builder: (context, snapshot) {
+        final pendingCount = snapshot.data ?? 0;
 
+        if (pendingCount == 0) {
+          return const SizedBox.shrink(); // Hide if no pending approvals
+        }
+
+        return Card(
+          elevation: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: InkWell(
+            onTap: () => Navigator.pushNamed(context, '/pending-approvals'),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.orange.shade400,
+                    Colors.deepOrange.shade500,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.pending_actions,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pending Approvals',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pendingCount user${pendingCount > 1 ? 's' : ''} awaiting approval',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$pendingCount',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white.withOpacity(0.8),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
   Widget _buildKeyStatistics(
       BuildContext context,
       stats,

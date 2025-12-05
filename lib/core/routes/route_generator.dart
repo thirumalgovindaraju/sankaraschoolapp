@@ -1,5 +1,5 @@
 // lib/core/routes/route_generator.dart
-// ✅ FIXED VERSION - Replace your entire route_generator.dart with this
+// ✅ COMPLETE VERSION - With Pending Approvals Route Added
 
 import 'package:flutter/material.dart';
 import '../../presentation/screens/auth/login_screen.dart';
@@ -13,6 +13,7 @@ import '../../presentation/screens/admin/add_teacher_screen.dart';
 import '../../presentation/screens/admin/manage_users_screen.dart';
 import '../../presentation/screens/admin/manage_students_screen.dart';
 import '../../presentation/screens/admin/manage_teachers_screen.dart';
+import '../../presentation/screens/admin/pending_approvals_screen.dart'; // ✅ ADDED
 import '../../presentation/screens/attendance/mark_attendance_screen.dart';
 import '../../presentation/screens/grades/grades_screen.dart';
 import '../../presentation/screens/profile/profile_screen.dart';
@@ -119,8 +120,6 @@ class RouteGenerator {
           builder: (_) => const AddTeacherScreen(),
         );
 
-    // ✅ FIXED: Edit teacher route - no longer needed since we use direct navigation
-    // But keeping it here in case someone uses named routes
       case '/edit-teacher':
         if (settings.arguments != null && settings.arguments is Map<String, dynamic>) {
           return MaterialPageRoute(
@@ -129,11 +128,17 @@ class RouteGenerator {
             ),
           );
         }
-        return _errorRoute('Teacher data required for editing'); // ✅ FIXED: Added message parameter
+        return _errorRoute('Teacher data required for editing');
 
       case '/manage-users':
         return MaterialPageRoute(
           builder: (_) => const ManageUsersScreen(),
+        );
+
+    // ✅ ADDED: Pending Approvals Route
+      case '/pending-approvals':
+        return MaterialPageRoute(
+          builder: (_) => const PendingApprovalsScreen(),
         );
 
       case '/teacher-attendance-entry':
@@ -328,6 +333,7 @@ class Routes {
   static const String addTeacher = '/add-teacher';
   static const String editTeacher = '/edit-teacher';
   static const String manageUsers = '/manage-users';
+  static const String pendingApprovals = '/pending-approvals'; // ✅ ADDED
 
   // Announcement Routes
   static const String createAnnouncement = '/create-announcement';

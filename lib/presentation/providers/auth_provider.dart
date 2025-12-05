@@ -207,23 +207,47 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Forgot Password
+  // Forgot Password - UPDATED FOR FIREBASE
   Future<bool> forgotPassword(String email) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final success = await _authService.forgotPassword(email);
+      final result = await _authService.forgotPassword(email);
 
-      if (!success) {
-        _errorMessage = 'Failed to send reset email';
+      if (result['success'] == true) {
+        _errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['message'] ?? 'Failed to send reset email';
+        notifyListeners();
+        return false;
       }
+    } catch (e) {
+      _errorMessage = 'An error occurred: ${e.toString()}';
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
-      return success;
+  // Refresh User Data
+  Future<void> refreshUserData() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final user = await _authService.refreshUserData();
+      if (user != null) {
+        _currentUser = user;
+        _errorMessage = null;
+      }
     } catch (e) {
       _errorMessage = e.toString();
-      return false;
     } finally {
       _isLoading = false;
       notifyListeners();

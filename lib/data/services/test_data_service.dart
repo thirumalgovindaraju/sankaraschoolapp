@@ -1,4 +1,5 @@
 // lib/data/services/test_data_service.dart
+// ✅ FIXED VERSION - All duplicates removed
 
 import 'dart:convert';
 import 'package:flutter/services.dart';
@@ -19,30 +20,13 @@ class TestDataService {
   Map<String, dynamic>? _testData;
   bool _isLoaded = false;
 
-  // NEW: Registration storage
+  // Registration storage
   final Map<String, String> _registeredPasswords = {}; // email -> password
   bool _registrationInitialized = false;
 
-  // Load test data from JSON file
-  /*
-  Future<void> loadTestData() async {
-    if (_isLoaded) return;
-
-    try {
-      final String jsonString = await rootBundle.loadString('assets/test_data.json');
-      _testData = json.decode(jsonString);
-      _isLoaded = true;
-      print('✅ Test data loaded successfully');
-    } catch (e) {
-      print('❌ Error loading test data: $e');
-      _testData = _getFallbackData();
-      _isLoaded = true;
-    }
-
-    // NEW: Load registered users
-    await _loadRegisteredUsers();
-  }
-  */
+  // ============================================================================
+  // LOAD TEST DATA
+  // ============================================================================
 
   Future<void> loadTestData() async {
     if (_isLoaded) return;
@@ -73,11 +57,12 @@ class TestDataService {
       }
     }
 
-    // NEW: Load registered users
+    // Load registered users
     await _loadRegisteredUsers();
   }
+
   // ============================================================================
-  // NEW: REGISTRATION FUNCTIONALITY
+  // REGISTRATION FUNCTIONALITY
   // ============================================================================
 
   /// Load registered users from SharedPreferences
@@ -106,25 +91,20 @@ class TestDataService {
           final role = userData['role'];
 
           if (role == 'admin') {
-            // Replace or add admin
             _testData!['admin'] = userData;
           } else if (role == 'teacher') {
-            // Add to teachers list
             final teachers = List<Map<String, dynamic>>.from(_testData?['teachers'] ?? []);
-            // Check if not already exists
             if (!teachers.any((t) => t['email'] == userData['email'])) {
               teachers.add(userData);
               _testData!['teachers'] = teachers;
             }
           } else if (role == 'student') {
-            // Add to students list
             final students = List<Map<String, dynamic>>.from(_testData?['students'] ?? []);
             if (!students.any((s) => s['email'] == userData['email'])) {
               students.add(userData);
               _testData!['students'] = students;
             }
           }
-          // Note: Parents are derived from student data, so we don't store them separately
         }
       }
 
@@ -182,7 +162,7 @@ class TestDataService {
     }
   }
 
-  /// Register a new user in test mode
+  /// Register a new user in test mode (WITH APPROVAL STATUS)
   Future<bool> registerUser({
     required String email,
     required String password,
@@ -193,17 +173,20 @@ class TestDataService {
     try {
       await loadTestData();
 
-      // Check if user already exists
       if (emailExists(email)) {
         print('❌ User with email $email already exists');
         return false;
       }
 
-      // Store password
       _registeredPasswords[email] = password;
-
-      // Create user data based on role
       final userId = '${role.name.toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // ✅ All registrations start as pending (except admin can be auto-approved)
+      final approvalStatus = (role == UserRole.admin) ? 'approved' : 'pending';
+      final approvalDate = (role == UserRole.admin)
+          ? DateTime.now().toIso8601String()
+          : null;
+      final approvedBy = (role == UserRole.admin) ? 'SYSTEM' : null;
 
       if (role == UserRole.admin) {
         _testData!['admin'] = {
@@ -214,6 +197,9 @@ class TestDataService {
           'phone': phone,
           'qualification': 'Registered User',
           'joining_date': DateTime.now().toIso8601String().split('T')[0],
+          'approval_status': "approved",
+          'approval_date': approvalDate,
+          'approved_by': approvedBy,
         };
       } else if (role == UserRole.teacher) {
         final teachers = List<Map<String, dynamic>>.from(_testData?['teachers'] ?? []);
@@ -227,6 +213,9 @@ class TestDataService {
           'qualification': 'Registered Teacher',
           'joining_date': DateTime.now().toIso8601String().split('T')[0],
           'role': 'teacher',
+          'approval_status': 'pending',
+          'approval_date': null,
+          'approved_by': null,
         });
         _testData!['teachers'] = teachers;
       } else if (role == UserRole.student) {
@@ -251,10 +240,12 @@ class TestDataService {
             'mother_occupation': '',
           },
           'role': 'student',
+          'approval_status': 'pending',
+          'approval_date': null,
+          'approved_by': null,
         });
         _testData!['students'] = students;
       } else if (role == UserRole.parent) {
-        // For parent registration, we'll create a placeholder student
         final students = List<Map<String, dynamic>>.from(_testData?['students'] ?? []);
         final studentId = 'S_${DateTime.now().millisecondsSinceEpoch}';
         students.add({
@@ -263,7 +254,7 @@ class TestDataService {
           'class': 'Not Assigned',
           'section': 'N/A',
           'roll_number': students.length + 1,
-          'email': '', // Empty for child
+          'email': '',
           'date_of_birth': '2010-01-01',
           'blood_group': 'Unknown',
           'parent_details': {
@@ -277,14 +268,15 @@ class TestDataService {
             'mother_occupation': '',
           },
           'role': 'student',
+          'approval_status': 'pending',
+          'approval_date': null,
+          'approved_by': null,
         });
         _testData!['students'] = students;
       }
 
-      // Save to storage
       await _saveRegisteredUsers();
-
-      print('✅ User registered successfully: $email (${role.name})');
+      print('✅ User registered successfully (PENDING APPROVAL): $email (${role.name})');
       return true;
     } catch (e) {
       print('❌ Registration error: $e');
@@ -334,7 +326,114 @@ class TestDataService {
   }
 
   // ============================================================================
-  // ORIGINAL FUNCTIONALITY (UNCHANGED)
+  // APPROVAL MANAGEMENT (NEW)
+  // ============================================================================
+
+  /// Get all pending users (awaiting approval)
+  List<Map<String, dynamic>> getPendingUsers() {
+    final pending = <Map<String, dynamic>>[];
+
+    // Check teachers
+    for (var teacher in getTeachers()) {
+      if (teacher['approval_status'] == 'pending') {
+        pending.add({
+          ...teacher,
+          'user_type': 'teacher',
+        });
+      }
+    }
+
+    // Check students
+    for (var student in getStudents()) {
+      if (student['approval_status'] == 'pending') {
+        pending.add({
+          ...student,
+          'user_type': 'student',
+        });
+      }
+    }
+
+    return pending;
+  }
+
+  /// Approve a user
+  Future<bool> approveUser(String userId, String userType, String approvedBy) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+
+      if (userType == 'teacher') {
+        final teachers = getTeachers();
+        final index = teachers.indexWhere((t) => t['teacher_id'] == userId);
+        if (index != -1) {
+          teachers[index]['approval_status'] = 'approved';
+          teachers[index]['approval_date'] = now;
+          teachers[index]['approved_by'] = approvedBy;
+          _testData!['teachers'] = teachers;
+          await _saveRegisteredUsers();
+          print('✅ Teacher approved: $userId');
+          return true;
+        }
+      } else if (userType == 'student') {
+        final students = getStudents();
+        final index = students.indexWhere((s) => s['student_id'] == userId);
+        if (index != -1) {
+          students[index]['approval_status'] = 'approved';
+          students[index]['approval_date'] = now;
+          students[index]['approved_by'] = approvedBy;
+          _testData!['students'] = students;
+          await _saveRegisteredUsers();
+          print('✅ Student approved: $userId');
+          return true;
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ Error approving user: $e');
+      return false;
+    }
+  }
+
+  /// Reject a user
+  Future<bool> rejectUser(String userId, String userType, String rejectedBy) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+
+      if (userType == 'teacher') {
+        final teachers = getTeachers();
+        final index = teachers.indexWhere((t) => t['teacher_id'] == userId);
+        if (index != -1) {
+          teachers[index]['approval_status'] = 'rejected';
+          teachers[index]['approval_date'] = now;
+          teachers[index]['approved_by'] = rejectedBy;
+          _testData!['teachers'] = teachers;
+          await _saveRegisteredUsers();
+          print('❌ Teacher rejected: $userId');
+          return true;
+        }
+      } else if (userType == 'student') {
+        final students = getStudents();
+        final index = students.indexWhere((s) => s['student_id'] == userId);
+        if (index != -1) {
+          students[index]['approval_status'] = 'rejected';
+          students[index]['approval_date'] = now;
+          students[index]['approved_by'] = rejectedBy;
+          _testData!['students'] = students;
+          await _saveRegisteredUsers();
+          print('❌ Student rejected: $userId');
+          return true;
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ Error rejecting user: $e');
+      return false;
+    }
+  }
+
+  // ============================================================================
+  // DATA GETTERS
   // ============================================================================
 
   // Get all teachers
@@ -385,33 +484,11 @@ class TestDataService {
     return List<Map<String, dynamic>>.from(_testData?['sample_attendance_records'] ?? []);
   }
 
-  // Generate attendance summary for a student
-  AttendanceSummaryModel generateAttendanceSummary(String studentId) {
-    final attendanceRecords = getAttendanceRecords();
-    final studentRecords = attendanceRecords.where((r) => r['student_id'] == studentId).toList();
+  // ============================================================================
+  // MODEL CONVERTERS (WITH APPROVAL STATUS)
+  // ============================================================================
 
-    final totalDays = 100; // Mock total school days
-    final presentDays = studentRecords.where((r) => r['status'] == 'Present').length + 85;
-    final absentDays = studentRecords.where((r) => r['status'] == 'Absent').length + 5;
-    final lateDays = 3;
-    final sickDays = 4;
-    final excusedDays = 3;
-
-    final percentage = (presentDays / totalDays) * 100;
-
-    return AttendanceSummaryModel(
-      studentId: studentId,
-      totalDays: totalDays,
-      presentDays: presentDays,
-      absentDays: absentDays,
-      lateDays: lateDays,
-      sickDays: sickDays,
-      excusedDays: excusedDays,
-      attendancePercentage: percentage,
-    );
-  }
-
-  // Convert teacher data to UserModel
+  /// Convert teacher data to UserModel
   UserModel teacherToUserModel(Map<String, dynamic> teacher) {
     return UserModel(
       id: teacher['teacher_id'],
@@ -426,10 +503,15 @@ class TestDataService {
         'qualification': teacher['qualification'],
         'joining_date': teacher['joining_date'],
       },
+      approvalStatus: _parseApprovalStatus(teacher['approval_status']),
+      approvalDate: teacher['approval_date'] != null
+          ? DateTime.parse(teacher['approval_date'])
+          : null,
+      approvedBy: teacher['approved_by'],
     );
   }
 
-  // Convert student data to UserModel
+  /// Convert student data to UserModel
   UserModel studentToUserModel(Map<String, dynamic> student) {
     return UserModel(
       id: student['student_id'],
@@ -446,10 +528,15 @@ class TestDataService {
         'blood_group': student['blood_group'],
         'parent_details': student['parent_details'],
       },
+      approvalStatus: _parseApprovalStatus(student['approval_status']),
+      approvalDate: student['approval_date'] != null
+          ? DateTime.parse(student['approval_date'])
+          : null,
+      approvedBy: student['approved_by'],
     );
   }
 
-  // Convert admin data to UserModel
+  /// Convert admin data to UserModel
   UserModel adminToUserModel(Map<String, dynamic> admin) {
     return UserModel(
       id: admin['admin_id'],
@@ -463,16 +550,38 @@ class TestDataService {
         'qualification': admin['qualification'],
         'joining_date': admin['joining_date'],
       },
+      approvalStatus: _parseApprovalStatus(admin['approval_status']),
+      approvalDate: admin['approval_date'] != null
+          ? DateTime.parse(admin['approval_date'])
+          : null,
+      approvedBy: admin['approved_by'],
     );
   }
 
-  // Login with test data (UPDATED to check passwords)
+  /// Helper method to parse approval status
+  static ApprovalStatus _parseApprovalStatus(String? statusString) {
+    switch (statusString?.toLowerCase()) {
+      case 'approved':
+        return ApprovalStatus.approved;
+      case 'rejected':
+        return ApprovalStatus.rejected;
+      case 'pending':
+      default:
+        return ApprovalStatus.pending;
+    }
+  }
+
+  // ============================================================================
+  // AUTHENTICATION
+  // ============================================================================
+
+  /// Login with test data (UPDATED to check passwords and approval)
   Future<UserModel?> loginWithTestData(String email, String password) async {
     await loadTestData();
 
     print('🔍 Attempting login for: $email');
 
-    // NEW: Check if this is a registered user with password
+    // Check if this is a registered user with password
     if (_registeredPasswords.containsKey(email)) {
       if (_registeredPasswords[email] != password) {
         print('❌ Invalid password for registered user: $email');
@@ -527,6 +636,11 @@ class TestDataService {
             'student_class': student['class'],
             'student_section': student['section'],
           },
+          approvalStatus: _parseApprovalStatus(student['approval_status']),
+          approvalDate: student['approval_date'] != null
+              ? DateTime.parse(student['approval_date'])
+              : null,
+          approvedBy: student['approved_by'],
         );
       }
     }
@@ -535,7 +649,41 @@ class TestDataService {
     return null;
   }
 
-  // Fallback data if JSON file is not found
+  // ============================================================================
+  // ATTENDANCE
+  // ============================================================================
+
+  /// Generate attendance summary for a student
+  AttendanceSummaryModel generateAttendanceSummary(String studentId) {
+    final attendanceRecords = getAttendanceRecords();
+    final studentRecords = attendanceRecords.where((r) => r['student_id'] == studentId).toList();
+
+    final totalDays = 100; // Mock total school days
+    final presentDays = studentRecords.where((r) => r['status'] == 'Present').length + 85;
+    final absentDays = studentRecords.where((r) => r['status'] == 'Absent').length + 5;
+    final lateDays = 3;
+    final sickDays = 4;
+    final excusedDays = 3;
+
+    final percentage = (presentDays / totalDays) * 100;
+
+    return AttendanceSummaryModel(
+      studentId: studentId,
+      totalDays: totalDays,
+      presentDays: presentDays,
+      absentDays: absentDays,
+      lateDays: lateDays,
+      sickDays: sickDays,
+      excusedDays: excusedDays,
+      attendancePercentage: percentage,
+    );
+  }
+
+  // ============================================================================
+  // FALLBACK DATA
+  // ============================================================================
+
+  /// Fallback data if JSON file is not found
   Map<String, dynamic> _getFallbackData() {
     return {
       'teachers': [
@@ -548,6 +696,9 @@ class TestDataService {
           'classes_assigned': ['10th-A', '10th-B'],
           'qualification': 'B.Ed, M.Sc. Mathematics',
           'joining_date': '2015-06-01',
+          'approval_status': 'approved',
+          'approval_date': '2015-06-01',
+          'approved_by': 'SYSTEM',
         }
       ],
       'students': [
@@ -569,7 +720,10 @@ class TestDataService {
             'mother_phone': '',
             'mother_email': '',
             'mother_occupation': '',
-          }
+          },
+          'approval_status': 'approved',
+          'approval_date': '2010-01-15',
+          'approved_by': 'SYSTEM',
         }
       ],
       'admin': {
@@ -580,10 +734,17 @@ class TestDataService {
         'phone': '+91-9876500001',
         'qualification': 'Ph.D. Education',
         'joining_date': '2010-01-01',
+        'approval_status': 'approved',
+        'approval_date': '2010-01-01',
+        'approved_by': 'SYSTEM',
       },
       'sample_attendance_records': []
     };
   }
+
+  // ============================================================================
+  // UTILITIES
+  // ============================================================================
 
   // Get metadata
   Map<String, dynamic> getMetadata() {

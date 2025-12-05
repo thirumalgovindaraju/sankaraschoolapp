@@ -831,17 +831,18 @@
     {"attendance_id": "ATT004", "student_id": "S004", "class": "Class 1", "section": "A", "date": "2024-11-01", "status": "Present", "marked_by": "T001", "remarks": ""},
     {"attendance_id": "ATT005", "student_id": "S005", "class": "Class 1", "section": "A", "date": "2024-11-01", "status": "Present", "marked_by": "T001", "remarks": ""}
   ],
+
   "admin": {
     "admin_id": "ADM001",
     "name": "Dr. Ramesh Krishnan",
     "role": "Principal",
-    "email": "principal@school.com",
+    "email": "admin@school.com",
     "phone": "+91-9876500001",
-    "date_of_birth": "1970-05-20",
-    "gender": "Male",
-    "address": "School Campus, Keelkattalai, Chennai 600117",
-    "qualification": "Ph.D. Education, M.Ed",
-    "joining_date": "2010-01-01"
+    "qualification": "Ph.D. in Educational Administration, M.Ed.",
+    "joining_date": "2010-01-15",
+    "approval_status": "approved",
+    "approval_date": "2010-01-15T00:00:00.000Z",
+    "approved_by": "SYSTEM"
   },
   "student": {
     "student_id": "STD001",

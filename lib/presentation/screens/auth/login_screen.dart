@@ -238,12 +238,84 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       debugPrint('❌ Login failed: ${authProvider.errorMessage}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.errorMessage ?? 'Login failed'),
-          backgroundColor: Colors.red,
-        ),
-      );
+
+      // ✅ NEW: Enhanced error handling for approval status
+      final errorMessage = authProvider.errorMessage ?? 'Login failed';
+
+      // Check if this is an approval-related error
+      final isApprovalPending = errorMessage.contains('pending admin approval') ||
+          errorMessage.contains('🕐');
+      final isRejected = errorMessage.contains('rejected') ||
+          errorMessage.contains('❌');
+
+      if (isApprovalPending) {
+        // Show approval pending dialog
+        await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              icon: const Icon(
+                Icons.hourglass_empty,
+                color: Colors.orange,
+                size: 48,
+              ),
+              title: const Text(
+                'Account Pending Approval',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: Text(
+                errorMessage,
+                style: const TextStyle(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+      } else if (isRejected) {
+        // Show rejected dialog
+        await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              icon: const Icon(
+                Icons.cancel,
+                color: Colors.red,
+                size: 48,
+              ),
+              title: const Text(
+                'Account Rejected',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              content: Text(
+                errorMessage,
+                style: const TextStyle(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        // Show standard error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

@@ -20,7 +20,8 @@ import 'presentation/providers/attendance_provider.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/services/data_initialization_service.dart';
-
+import 'package:provider/provider.dart';
+import 'presentation/providers/worksheet_generator_provider.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -79,6 +80,10 @@ class _MyAppState extends State<MyApp> {
         // Auth Provider (doesn't use Firebase directly)
         ChangeNotifierProvider(
           create: (context) => AuthProvider(AuthService(ApiService())),
+        ),
+
+        ChangeNotifierProvider(
+          create: (_) => WorksheetGeneratorProvider(),
         ),
 
         // Dashboard Provider (uses Firebase - will now work)

@@ -23,7 +23,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   @override
   void initState() {
     super.initState();
-    // Delay loading until after the first frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboardData();
     });
@@ -32,13 +31,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final userId = authProvider.currentUser?.id;
-    final userEmail = authProvider.currentUser?.email; // 🆕 Get email
+    final userEmail = authProvider.currentUser?.email;
     final userRole = authProvider.currentUser?.role?.name;
     print('📊 Loading teacher dashboard for: $userId');
-    print('📧 Teacher email: $userEmail'); // 🆕 Debug log
-    // Load attendance data ONCE
+    print('📧 Teacher email: $userEmail');
+
     if (!_attendanceLoaded) {
-      final classId = '10-A'; // TODO: Get from teacher's profile
+      final classId = '10-A';
       await context.read<AttendanceProvider>().fetchClassAttendance(
         classId: classId,
         date: DateTime.now(),
@@ -50,13 +49,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       }
     }
 
-    // Load other data
     await Future.wait([
       context.read<AnnouncementProvider>().fetchAnnouncements(
         userRole: userRole ?? 'teacher',
         userId: userId,
       ),
-      // 🆕 FIXED: Use email instead of userId for notifications
       if (userEmail != null && userEmail.isNotEmpty)
         context.read<NotificationProvider>().fetchNotifications(userEmail)
       else if (userId != null)
@@ -99,19 +96,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome Section
               _buildWelcomeCard(user?.name ?? 'Teacher'),
               const SizedBox(height: 20),
-
-              // Quick Actions
               _buildQuickActions(context),
               const SizedBox(height: 20),
-
-              // Today's Schedule
               _buildTodaysSchedule(context),
               const SizedBox(height: 20),
-
-              // Today's Attendance Summary
               Text(
                 'Today\'s Attendance',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -119,13 +109,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // ✅ FIXED: Use Consumer without FutureBuilder
               Consumer<AttendanceProvider>(
                 builder: (context, attendanceProvider, child) {
-                  final classId = '10-A'; // TODO: Get from teacher's profile
+                  final classId = '10-A';
 
-                  // Show loading state
                   if (!_attendanceLoaded && attendanceProvider.isLoading) {
                     return const Card(
                       child: Padding(
@@ -135,7 +122,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     );
                   }
 
-                  // Show the attendance data
                   final records = attendanceProvider.classAttendanceRecords;
                   final presentCount = records.where((r) => r.status == 'present').length;
                   final absentCount = records.where((r) => r.status == 'absent').length;
@@ -221,8 +207,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 },
               ),
               const SizedBox(height: 20),
-
-              // Recent Announcements
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -265,8 +249,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   },
                 ),
               const SizedBox(height: 20),
-
-              // Class Statistics
               _buildClassStatistics(context),
             ],
           ),
@@ -401,6 +383,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               color: Colors.green,
               onTap: () => Navigator.pushNamed(context, '/create-announcement'),
             ),
+            // ✨ NEW: Worksheet Generator Button
+            _buildActionCard(
+              icon: Icons.auto_awesome,
+              label: 'AI Worksheet',
+              color: Colors.purple,
+              onTap: () => Navigator.pushNamed(context, '/worksheet-generator'),
+            ),
             _buildActionCard(
               icon: Icons.grade,
               label: 'Grades',
@@ -414,7 +403,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             _buildActionCard(
               icon: Icons.schedule,
               label: 'Timetable',
-              color: Colors.purple,
+              color: Colors.purple.shade300,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Timetable feature coming soon')),

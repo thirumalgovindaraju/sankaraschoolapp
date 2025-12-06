@@ -1,5 +1,5 @@
 // lib/core/routes/route_generator.dart
-// ✅ COMPLETE VERSION - With Pending Approvals Route Added
+// ✅ FIXED VERSION - WorksheetGeneratorScreen import added
 
 import 'package:flutter/material.dart';
 import '../../presentation/screens/auth/login_screen.dart';
@@ -13,7 +13,7 @@ import '../../presentation/screens/admin/add_teacher_screen.dart';
 import '../../presentation/screens/admin/manage_users_screen.dart';
 import '../../presentation/screens/admin/manage_students_screen.dart';
 import '../../presentation/screens/admin/manage_teachers_screen.dart';
-import '../../presentation/screens/admin/pending_approvals_screen.dart'; // ✅ ADDED
+import '../../presentation/screens/admin/pending_approvals_screen.dart';
 import '../../presentation/screens/attendance/mark_attendance_screen.dart';
 import '../../presentation/screens/grades/grades_screen.dart';
 import '../../presentation/screens/profile/profile_screen.dart';
@@ -36,6 +36,16 @@ import '../../data/models/announcement_model.dart';
 import '../../presentation/screens/teacher/teacher_attendance_entry_screen.dart';
 import '../../presentation/screens/auth/forgot_password_screen.dart';
 
+// ✅ NEW IMPORTS
+import '../../presentation/screens/home/home_screen.dart';
+import '../../presentation/screens/about/about_screen.dart';
+import '../../presentation/screens/curriculum/curriculum_screen.dart';
+import '../../presentation/screens/admissions/admissions_screen.dart';
+import '../../presentation/screens/facilities/facilities_screen.dart';
+import '../../presentation/screens/faculty/faculty_screen.dart';
+import '../../presentation/screens/gallery/gallery_screen.dart';
+import '../../presentation/screens/worksheet/worksheet_generator_screen.dart'; // ✅ ADDED THIS
+
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     final args = settings.arguments;
@@ -54,6 +64,31 @@ class RouteGenerator {
 
       case '/debug-users':
         return MaterialPageRoute(builder: (_) => const DebugUsersScreen());
+
+    // ============= HOME & PUBLIC ROUTES =============
+      case '/home':
+        return MaterialPageRoute(builder: (_) => const HomeScreen());
+
+      case '/about':
+        return MaterialPageRoute(builder: (_) => const AboutScreen());
+
+      case '/curriculum':
+        return MaterialPageRoute(builder: (_) => const CurriculumScreen());
+
+      case '/admissions':
+        return MaterialPageRoute(builder: (_) => const AdmissionsScreen());
+
+      case '/facilities':
+        return MaterialPageRoute(builder: (_) => const FacilitiesScreen());
+
+      case '/faculty':
+        return MaterialPageRoute(builder: (_) => const FacultyScreen());
+
+      case '/gallery':
+        return MaterialPageRoute(builder: (_) => const GalleryScreen());
+
+      case '/news':
+        return MaterialPageRoute(builder: (_) => const NewsManagementScreen());
 
     // ============= DASHBOARD ROUTES =============
       case '/admin-dashboard':
@@ -135,7 +170,6 @@ class RouteGenerator {
           builder: (_) => const ManageUsersScreen(),
         );
 
-    // ✅ ADDED: Pending Approvals Route
       case '/pending-approvals':
         return MaterialPageRoute(
           builder: (_) => const PendingApprovalsScreen(),
@@ -162,6 +196,12 @@ class RouteGenerator {
       case '/post-news':
         return MaterialPageRoute(
           builder: (_) => const NewsManagementScreen(),
+        );
+
+    // ============= WORKSHEET GENERATOR ROUTE =============
+      case '/worksheet-generator':
+        return MaterialPageRoute(
+          builder: (_) => const WorksheetGeneratorScreen(),
         );
 
     // ============= ACADEMIC ROUTES (Enhanced versions) =============
@@ -317,6 +357,16 @@ class Routes {
   static const String forgotPassword = '/forgot-password';
   static const String debugUsers = '/debug-users';
 
+  // Public/Home Routes
+  static const String home = '/home';
+  static const String about = '/about';
+  static const String curriculum = '/curriculum';
+  static const String admissions = '/admissions';
+  static const String facilities = '/facilities';
+  static const String faculty = '/faculty';
+  static const String gallery = '/gallery';
+  static const String news = '/news';
+
   // Dashboard Routes
   static const String adminDashboard = '/admin-dashboard';
   static const String teacherDashboard = '/teacher-dashboard';
@@ -333,12 +383,15 @@ class Routes {
   static const String addTeacher = '/add-teacher';
   static const String editTeacher = '/edit-teacher';
   static const String manageUsers = '/manage-users';
-  static const String pendingApprovals = '/pending-approvals'; // ✅ ADDED
+  static const String pendingApprovals = '/pending-approvals';
 
   // Announcement Routes
   static const String createAnnouncement = '/create-announcement';
   static const String announcements = '/announcements';
   static const String postNews = '/post-news';
+
+  // Worksheet Route
+  static const String worksheetGenerator = '/worksheet-generator';
 
   // Academic Routes
   static const String events = '/events';

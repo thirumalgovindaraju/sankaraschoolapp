@@ -1,5 +1,5 @@
 // lib/core/routes/route_generator.dart
-// ✅ FIXED VERSION - WorksheetGeneratorScreen import added
+// ✅ FIXED VERSION - Added missing imports
 
 import 'package:flutter/material.dart';
 import '../../presentation/screens/auth/login_screen.dart';
@@ -36,7 +36,7 @@ import '../../data/models/announcement_model.dart';
 import '../../presentation/screens/teacher/teacher_attendance_entry_screen.dart';
 import '../../presentation/screens/auth/forgot_password_screen.dart';
 
-// ✅ NEW IMPORTS
+// Public/Home screen imports
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/about/about_screen.dart';
 import '../../presentation/screens/curriculum/curriculum_screen.dart';
@@ -44,7 +44,14 @@ import '../../presentation/screens/admissions/admissions_screen.dart';
 import '../../presentation/screens/facilities/facilities_screen.dart';
 import '../../presentation/screens/faculty/faculty_screen.dart';
 import '../../presentation/screens/gallery/gallery_screen.dart';
-import '../../presentation/screens/worksheet/worksheet_generator_screen.dart'; // ✅ ADDED THIS
+
+// ✅ WORKSHEET IMPORTS - ADDED
+import '../../presentation/screens/worksheet/worksheet_generator_screen.dart';
+import '../../data/models/worksheet_generator_model.dart';
+
+// ✅ TODO: Create these screens if they don't exist yet
+// import '../../presentation/screens/worksheet/worksheet_attempt_screen.dart';
+// import '../../presentation/screens/worksheet/submission_review_screen.dart';
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -102,6 +109,25 @@ class RouteGenerator {
 
       case '/parent-dashboard':
         return MaterialPageRoute(builder: (_) => const ParentDashboard());
+
+    // ============= WORKSHEET ROUTES =============
+      case '/worksheet-generator':
+        return MaterialPageRoute(
+          builder: (_) => const WorksheetGeneratorScreen(),
+        );
+
+    // ✅ COMMENTED OUT - Create these screens later
+    // case '/worksheet-attempt':
+    //   final worksheet = settings.arguments as WorksheetModel;
+    //   return MaterialPageRoute(
+    //     builder: (_) => WorksheetAttemptScreen(worksheet: worksheet),
+    //   );
+
+    // case '/submission-review':
+    //   final worksheet = settings.arguments as WorksheetModel;
+    //   return MaterialPageRoute(
+    //     builder: (_) => SubmissionReviewScreen(worksheet: worksheet),
+    //   );
 
     // ============= STUDENT MANAGEMENT ROUTES =============
       case '/manage-students':
@@ -196,12 +222,6 @@ class RouteGenerator {
       case '/post-news':
         return MaterialPageRoute(
           builder: (_) => const NewsManagementScreen(),
-        );
-
-    // ============= WORKSHEET GENERATOR ROUTE =============
-      case '/worksheet-generator':
-        return MaterialPageRoute(
-          builder: (_) => const WorksheetGeneratorScreen(),
         );
 
     // ============= ACADEMIC ROUTES (Enhanced versions) =============

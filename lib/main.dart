@@ -1,4 +1,5 @@
 // lib/main.dart
+// ✅ FIXED VERSION - Removed duplicate closing parenthesis
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,11 +18,12 @@ import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/student_provider.dart';
 import 'presentation/providers/teacher_provider.dart';
 import 'presentation/providers/attendance_provider.dart';
+import 'presentation/providers/worksheet_generator_provider.dart';
+import 'presentation/providers/worksheet_submission_provider.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/services/data_initialization_service.dart';
-import 'package:provider/provider.dart';
-import 'presentation/providers/worksheet_generator_provider.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -82,10 +84,6 @@ class _MyAppState extends State<MyApp> {
           create: (context) => AuthProvider(AuthService(ApiService())),
         ),
 
-        ChangeNotifierProvider(
-          create: (_) => WorksheetGeneratorProvider(),
-        ),
-
         // Dashboard Provider (uses Firebase - will now work)
         ChangeNotifierProvider(
           create: (_) => DashboardProvider()..initializeRealTimeUpdates(),
@@ -104,6 +102,10 @@ class _MyAppState extends State<MyApp> {
 
         // Attendance Provider
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+
+        // ✅ FIXED: Removed duplicate closing parenthesis
+        ChangeNotifierProvider(create: (_) => WorksheetGeneratorProvider()),
+        ChangeNotifierProvider(create: (_) => WorksheetSubmissionProvider()),
       ],
       child: MaterialApp(
         title: 'Sri Sankara Global School',

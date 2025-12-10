@@ -1,4 +1,5 @@
 // lib/presentation/providers/worksheet_generator_provider.dart
+// ✅ COMPLETE FIX - Changed difficulty from String to DifficultyLevel
 
 import 'package:flutter/material.dart';
 import '../../data/models/worksheet_generator_model.dart';
@@ -7,10 +8,10 @@ import '../../data/services/worksheet_generator_service.dart';
 
 class WorksheetGeneratorProvider extends ChangeNotifier {
   // State
-  List<TextbookModel> _textbooks = [];
+  List<Textbook> _textbooks = [];
   List<WorksheetModel> _worksheets = [];
-  TextbookModel? _selectedTextbook;
-  List<TopicModel> _selectedTopics = [];
+  Textbook? _selectedTextbook;
+  List<Topic> _selectedTopics = [];
   bool _isLoading = false;
   String? _error;
 
@@ -18,24 +19,24 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   int _mcqCount = 10;
   int _shortAnswerCount = 5;
   int _longAnswerCount = 2;
-  DifficultyLevel _difficulty = DifficultyLevel.medium;
+  DifficultyLevel _difficulty = DifficultyLevel.medium; // ✅ Changed from String to DifficultyLevel
   int _durationMinutes = 60;
-  WorksheetType _worksheetType = WorksheetType.practice;
+  String _worksheetType = 'practice';
 
   // Getters
-  List<TextbookModel> get textbooks => _textbooks;
+  List<Textbook> get textbooks => _textbooks;
   List<WorksheetModel> get worksheets => _worksheets;
-  TextbookModel? get selectedTextbook => _selectedTextbook;
-  List<TopicModel> get selectedTopics => _selectedTopics;
+  Textbook? get selectedTextbook => _selectedTextbook;
+  List<Topic> get selectedTopics => _selectedTopics;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
   int get mcqCount => _mcqCount;
   int get shortAnswerCount => _shortAnswerCount;
   int get longAnswerCount => _longAnswerCount;
-  DifficultyLevel get difficulty => _difficulty;
+  DifficultyLevel get difficulty => _difficulty; // ✅ Returns DifficultyLevel instead of String
   int get durationMinutes => _durationMinutes;
-  WorksheetType get worksheetType => _worksheetType;
+  String get worksheetType => _worksheetType;
 
   int get totalQuestions => _mcqCount + _shortAnswerCount + _longAnswerCount;
   int get estimatedMarks =>
@@ -110,17 +111,17 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   }
 
   // Select textbook
-  void selectTextbook(TextbookModel textbook) {
+  void selectTextbook(Textbook textbook) {
     _selectedTextbook = textbook;
     _selectedTopics = []; // Reset topic selection
     notifyListeners();
   }
 
   // Get all topics from selected textbook
-  List<TopicModel> getAllTopics() {
+  List<Topic> getAllTopics() {
     if (_selectedTextbook == null) return [];
 
-    List<TopicModel> allTopics = [];
+    List<Topic> allTopics = [];
     for (var chapter in _selectedTextbook!.chapters) {
       allTopics.addAll(chapter.topics);
     }
@@ -128,7 +129,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   }
 
   // Toggle topic selection
-  void toggleTopic(TopicModel topic) {
+  void toggleTopic(Topic topic) {
     if (_selectedTopics.any((t) => t.id == topic.id)) {
       _selectedTopics.removeWhere((t) => t.id == topic.id);
     } else {
@@ -138,7 +139,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   }
 
   // Select all topics in a chapter
-  void selectChapterTopics(ChapterModel chapter, bool select) {
+  void selectChapterTopics(Chapter chapter, bool select) {
     if (select) {
       for (var topic in chapter.topics) {
         if (!_selectedTopics.any((t) => t.id == topic.id)) {
@@ -169,7 +170,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDifficulty(DifficultyLevel difficulty) {
+  void setDifficulty(DifficultyLevel difficulty) { // ✅ Changed parameter type from dynamic to DifficultyLevel
     _difficulty = difficulty;
     notifyListeners();
   }
@@ -179,12 +180,16 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setWorksheetType(WorksheetType type) {
-    _worksheetType = type;
+  void setWorksheetType(dynamic type) {
+    if (type is WorksheetType) {
+      _worksheetType = type.name;
+    } else if (type is String) {
+      _worksheetType = type;
+    }
     notifyListeners();
   }
 
-  // Generate worksheet
+  // Generate worksheet - calling the service directly
   Future<WorksheetModel?> generateWorksheet({
     required String title,
     required String createdBy,
@@ -201,6 +206,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
+      // Call the service method with all required parameters
       final worksheet = await WorksheetGeneratorService.generateWorksheet(
         title: title,
         textbook: _selectedTextbook!,
@@ -208,7 +214,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
         mcqCount: _mcqCount,
         shortAnswerCount: _shortAnswerCount,
         longAnswerCount: _longAnswerCount,
-        difficulty: _difficulty,
+        difficulty: _difficulty.name, // ✅ Convert enum to string for service
         durationMinutes: _durationMinutes,
         createdBy: createdBy,
         createdByName: createdByName,
@@ -230,13 +236,14 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Load worksheets
+  // Load worksheets - using the service
   Future<void> loadWorksheets() async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      _worksheets = await WorksheetGeneratorService.getWorksheets();
+      // Call the service method
+      _worksheets = await WorksheetGeneratorService.fetchWorksheets();
 
       _isLoading = false;
       notifyListeners();
@@ -247,7 +254,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Generate PDF
+  // Generate PDF - using the service
   Future<void> generatePDF(WorksheetModel worksheet) async {
     try {
       _isLoading = true;
@@ -264,7 +271,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Assign worksheet
+  // Assign worksheet - using the service
   Future<bool> assignWorksheet({
     required String worksheetId,
     List<String>? studentIds,
@@ -291,6 +298,33 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
+  // Submit worksheet
+  Future<bool> submitWorksheet(
+      String worksheetId,
+      Map<String, dynamic> submission,
+      ) async {
+    try {
+      final worksheetSubmission = WorksheetSubmission(
+        studentId: submission['studentId'],
+        studentName: submission['studentName'],
+        submittedAt: submission['submittedAt'],
+        score: submission['score'],
+        totalMarks: submission['totalMarks'],
+        answers: List<Map<String, dynamic>>.from(submission['answers']),
+        timeTaken: submission['timeTaken'],
+      );
+
+      return await WorksheetGeneratorService.submitWorksheet(
+        worksheetId,
+        worksheetSubmission,
+      );
+    } catch (e) {
+      _error = 'Submission failed: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Reset configuration
   void resetConfiguration() {
     _selectedTextbook = null;
@@ -298,9 +332,9 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     _mcqCount = 10;
     _shortAnswerCount = 5;
     _longAnswerCount = 2;
-    _difficulty = DifficultyLevel.medium;
+    _difficulty = DifficultyLevel.medium; // ✅ Reset to enum instead of string
     _durationMinutes = 60;
-    _worksheetType = WorksheetType.practice;
+    _worksheetType = 'practice';
     _error = null;
     notifyListeners();
   }

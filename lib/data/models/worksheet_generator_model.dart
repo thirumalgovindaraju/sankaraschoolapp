@@ -2,206 +2,181 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Textbook model for storing uploaded PDFs and their content
-class TextbookModel {
+// ========================================
+// TEXTBOOK MODELS
+// ========================================
+
+class Textbook {
   final String id;
   final String title;
   final String subject;
-  final String board; // IGCSE, CBSE, IB
-  final String grade; // Year 9, 10, 11
-  final String pdfUrl; // Firebase Storage URL
-  final List<ChapterModel> chapters;
-  final DateTime uploadedAt;
-  final String uploadedBy;
-  final int totalPages;
+  final String board;
+  final String grade;
   final String? publisher;
   final String? edition;
-  final ProcessingStatus processingStatus;
+  final String? pdfUrl;
+  final DateTime uploadedAt;
+  final String status; // 'processing', 'ready', 'failed'
+  final List<Chapter> chapters;
+  final String? errorMessage;
 
-  TextbookModel({
+  Textbook({
     required this.id,
     required this.title,
     required this.subject,
     required this.board,
     required this.grade,
-    required this.pdfUrl,
-    required this.chapters,
-    required this.uploadedAt,
-    required this.uploadedBy,
-    required this.totalPages,
     this.publisher,
     this.edition,
-    this.processingStatus = ProcessingStatus.pending,
+    this.pdfUrl,
+    required this.uploadedAt,
+    required this.status,
+    required this.chapters,
+    this.errorMessage,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'subject': subject,
-      'board': board,
-      'grade': grade,
-      'pdfUrl': pdfUrl,
-      'chapters': chapters.map((c) => c.toMap()).toList(),
-      'uploadedAt': uploadedAt,
-      'uploadedBy': uploadedBy,
-      'totalPages': totalPages,
-      'publisher': publisher,
-      'edition': edition,
-      'processingStatus': processingStatus.toString(),
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'subject': subject,
+    'board': board,
+    'grade': grade,
+    'publisher': publisher,
+    'edition': edition,
+    'pdfUrl': pdfUrl,
+    'uploadedAt': Timestamp.fromDate(uploadedAt),
+    'status': status,
+    'chapters': chapters.map((c) => c.toJson()).toList(),
+    'errorMessage': errorMessage,
+  };
 
-  factory TextbookModel.fromMap(Map<String, dynamic> map) {
-    return TextbookModel(
-      id: map['id'] ?? '',
-      title: map['title'] ?? '',
-      subject: map['subject'] ?? '',
-      board: map['board'] ?? '',
-      grade: map['grade'] ?? '',
-      pdfUrl: map['pdfUrl'] ?? '',
-      chapters: (map['chapters'] as List?)
-          ?.map((c) => ChapterModel.fromMap(c))
-          .toList() ??
-          [],
-      uploadedAt: (map['uploadedAt'] as Timestamp).toDate(),
-      uploadedBy: map['uploadedBy'] ?? '',
-      totalPages: map['totalPages'] ?? 0,
-      publisher: map['publisher'],
-      edition: map['edition'],
-      processingStatus: ProcessingStatus.values.firstWhere(
-            (e) => e.toString() == map['processingStatus'],
-        orElse: () => ProcessingStatus.pending,
-      ),
-    );
-  }
+  factory Textbook.fromJson(Map<String, dynamic> json) => Textbook(
+    id: json['id'] ?? '',
+    title: json['title'] ?? '',
+    subject: json['subject'] ?? '',
+    board: json['board'] ?? '',
+    grade: json['grade'] ?? '',
+    publisher: json['publisher'],
+    edition: json['edition'],
+    pdfUrl: json['pdfUrl'],
+    uploadedAt: (json['uploadedAt'] as Timestamp).toDate(),
+    status: json['status'] ?? 'processing',
+    chapters: json['chapters'] != null
+        ? (json['chapters'] as List).map((c) => Chapter.fromJson(c)).toList()
+        : [],
+    errorMessage: json['errorMessage'],
+  );
 }
 
-/// Chapter model for organizing textbook content
-class ChapterModel {
+class Chapter {
   final String id;
   final String title;
   final int chapterNumber;
-  final int startPage;
-  final int endPage;
-  final List<TopicModel> topics;
-  final String extractedText;
+  final List<Topic> topics;
+  final String? summary;
 
-  ChapterModel({
+  Chapter({
     required this.id,
     required this.title,
     required this.chapterNumber,
-    required this.startPage,
-    required this.endPage,
     required this.topics,
-    required this.extractedText,
+    this.summary,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'chapterNumber': chapterNumber,
-      'startPage': startPage,
-      'endPage': endPage,
-      'topics': topics.map((t) => t.toMap()).toList(),
-      'extractedText': extractedText,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'chapterNumber': chapterNumber,
+    'topics': topics.map((t) => t.toJson()).toList(),
+    'summary': summary,
+  };
 
-  factory ChapterModel.fromMap(Map<String, dynamic> map) {
-    return ChapterModel(
-      id: map['id'] ?? '',
-      title: map['title'] ?? '',
-      chapterNumber: map['chapterNumber'] ?? 0,
-      startPage: map['startPage'] ?? 0,
-      endPage: map['endPage'] ?? 0,
-      topics: (map['topics'] as List?)
-          ?.map((t) => TopicModel.fromMap(t))
-          .toList() ??
-          [],
-      extractedText: map['extractedText'] ?? '',
-    );
-  }
+  factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
+    id: json['id'] ?? '',
+    title: json['title'] ?? '',
+    chapterNumber: json['chapterNumber'] ?? 0,
+    topics: json['topics'] != null
+        ? (json['topics'] as List).map((t) => Topic.fromJson(t)).toList()
+        : [],
+    summary: json['summary'],
+  );
 }
 
-/// Topic model for specific subjects within chapters
-class TopicModel {
+// Fixed Topic class with correct fromJson constructor
+
+class Topic {
   final String id;
   final String name;
-  final String description;
+  final String title;
   final List<String> keywords;
-  final List<String> formulas;
+  final String? description;
   final DifficultyLevel difficulty;
-  final int pageReference;
-  final List<String> learningObjectives;
 
-  TopicModel({
+  Topic({
     required this.id,
+    required this.title,
+    required this.keywords,
     required this.name,
     required this.description,
-    required this.keywords,
-    required this.formulas,
     required this.difficulty,
-    required this.pageReference,
-    required this.learningObjectives,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'keywords': keywords,
-      'formulas': formulas,
-      'difficulty': difficulty.toString(),
-      'pageReference': pageReference,
-      'learningObjectives': learningObjectives,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,  // ✅ Added
+    'title': title,
+    'keywords': keywords,
+    'description': description,
+    'difficulty': difficulty.toString().split('.').last,  // ✅ Added
+  };
 
-  factory TopicModel.fromMap(Map<String, dynamic> map) {
-    return TopicModel(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      description: map['description'] ?? '',
-      keywords: List<String>.from(map['keywords'] ?? []),
-      formulas: List<String>.from(map['formulas'] ?? []),
-      difficulty: DifficultyLevel.values.firstWhere(
-            (e) => e.toString() == map['difficulty'],
+  factory Topic.fromJson(Map<String, dynamic> json) {
+    return Topic(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? json['title'] as String? ?? '',  // ✅ Fallback to title if name is missing
+      title: json['title'] as String? ?? '',  // ✅ Added title parameter
+      keywords: json['keywords'] != null
+          ? List<String>.from(json['keywords'] as List)
+          : [],  // ✅ Added keywords parameter
+      description: json['description'] as String?,
+      difficulty: json['difficulty'] != null
+          ? DifficultyLevel.values.firstWhere(
+            (e) => e.toString().split('.').last == json['difficulty'],
         orElse: () => DifficultyLevel.medium,
-      ),
-      pageReference: map['pageReference'] ?? 0,
-      learningObjectives: List<String>.from(map['learningObjectives'] ?? []),
+      )
+          : DifficultyLevel.medium,
     );
   }
 }
 
-/// Worksheet model for generated question papers
+// ========================================
+// WORKSHEET MODELS
+// ========================================
+
 class WorksheetModel {
   final String id;
   final String title;
   final String textbookId;
-  final String textbookTitle;
+  final String? textbookTitle;
   final List<String> topicIds;
   final List<String> topicNames;
-  final List<QuestionModel> questions;
+  final List<Question> questions;
   final int totalMarks;
   final int durationMinutes;
   final DateTime createdAt;
   final String createdBy;
-  final String createdByName;
+  final String? createdByName;
   final List<String> assignedToStudents;
   final List<String> assignedToClasses;
-  final WorksheetType type;
-  final WorksheetStatus status;
-  final DifficultyLevel overallDifficulty;
+  final String status; // 'draft', 'published', 'archived'
+  final List<WorksheetSubmission>? submissions;
+  final String overallDifficulty; // ✅ ADDED
 
   WorksheetModel({
     required this.id,
     required this.title,
     required this.textbookId,
-    required this.textbookTitle,
+    this.textbookTitle,
     required this.topicIds,
     required this.topicNames,
     required this.questions,
@@ -209,293 +184,187 @@ class WorksheetModel {
     required this.durationMinutes,
     required this.createdAt,
     required this.createdBy,
-    required this.createdByName,
-    required this.assignedToStudents,
-    required this.assignedToClasses,
-    required this.type,
-    this.status = WorksheetStatus.draft,
-    this.overallDifficulty = DifficultyLevel.medium,
+    this.createdByName,
+    this.assignedToStudents = const [],
+    this.assignedToClasses = const [],
+    this.status = 'draft',
+    this.submissions,
+    this.overallDifficulty = 'medium', // ✅ ADDED
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'textbookId': textbookId,
-      'textbookTitle': textbookTitle,
-      'topicIds': topicIds,
-      'topicNames': topicNames,
-      'questions': questions.map((q) => q.toMap()).toList(),
-      'totalMarks': totalMarks,
-      'durationMinutes': durationMinutes,
-      'createdAt': createdAt,
-      'createdBy': createdBy,
-      'createdByName': createdByName,
-      'assignedToStudents': assignedToStudents,
-      'assignedToClasses': assignedToClasses,
-      'type': type.toString(),
-      'status': status.toString(),
-      'overallDifficulty': overallDifficulty.toString(),
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'textbookId': textbookId,
+    'textbookTitle': textbookTitle,
+    'topicIds': topicIds,
+    'topicNames': topicNames,
+    'questions': questions.map((q) => q.toJson()).toList(),
+    'totalMarks': totalMarks,
+    'durationMinutes': durationMinutes,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'createdBy': createdBy,
+    'createdByName': createdByName,
+    'assignedToStudents': assignedToStudents,
+    'assignedToClasses': assignedToClasses,
+    'status': status,
+    'submissions': submissions?.map((s) => s.toJson()).toList(),
+    'overallDifficulty': overallDifficulty,
+  };
 
-  factory WorksheetModel.fromMap(Map<String, dynamic> map) {
-    return WorksheetModel(
-      id: map['id'] ?? '',
-      title: map['title'] ?? '',
-      textbookId: map['textbookId'] ?? '',
-      textbookTitle: map['textbookTitle'] ?? '',
-      topicIds: List<String>.from(map['topicIds'] ?? []),
-      topicNames: List<String>.from(map['topicNames'] ?? []),
-      questions: (map['questions'] as List?)
-          ?.map((q) => QuestionModel.fromMap(q))
-          .toList() ??
-          [],
-      totalMarks: map['totalMarks'] ?? 0,
-      durationMinutes: map['durationMinutes'] ?? 0,
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
-      createdBy: map['createdBy'] ?? '',
-      createdByName: map['createdByName'] ?? '',
-      assignedToStudents: List<String>.from(map['assignedToStudents'] ?? []),
-      assignedToClasses: List<String>.from(map['assignedToClasses'] ?? []),
-      type: WorksheetType.values.firstWhere(
-            (e) => e.toString() == map['type'],
-        orElse: () => WorksheetType.practice,
-      ),
-      status: WorksheetStatus.values.firstWhere(
-            (e) => e.toString() == map['status'],
-        orElse: () => WorksheetStatus.draft,
-      ),
-      overallDifficulty: DifficultyLevel.values.firstWhere(
-            (e) => e.toString() == map['overallDifficulty'],
-        orElse: () => DifficultyLevel.medium,
-      ),
-    );
-  }
+  factory WorksheetModel.fromJson(Map<String, dynamic> json) => WorksheetModel(
+    id: json['id'] ?? '',
+    title: json['title'] ?? '',
+    textbookId: json['textbookId'] ?? '',
+    textbookTitle: json['textbookTitle'],
+    topicIds: List<String>.from(json['topicIds'] ?? []),
+    topicNames: List<String>.from(json['topicNames'] ?? []),
+    questions: json['questions'] != null
+        ? (json['questions'] as List).map((q) => Question.fromJson(q)).toList()
+        : [],
+    totalMarks: json['totalMarks'] ?? 0,
+    durationMinutes: json['durationMinutes'] ?? 0,
+    createdAt: (json['createdAt'] as Timestamp).toDate(),
+    createdBy: json['createdBy'] ?? '',
+    createdByName: json['createdByName'],
+    assignedToStudents: List<String>.from(json['assignedToStudents'] ?? []),
+    assignedToClasses: List<String>.from(json['assignedToClasses'] ?? []),
+    status: json['status'] ?? 'draft',
+    submissions: json['submissions'] != null
+        ? (json['submissions'] as List)
+        .map((s) => WorksheetSubmission.fromJson(s))
+        .toList()
+        : null,
+    overallDifficulty: json['overallDifficulty'] ?? 'medium',
+  );
 }
 
-/// Question model for individual questions in worksheets
-class QuestionModel {
+class Question {
   final String id;
   final int questionNumber;
   final QuestionType type;
-  final String text;
+  final String questionText;
   final List<String>? options; // For MCQ
   final String? correctAnswer;
-  final String? markingScheme;
   final int marks;
-  final DifficultyLevel difficulty;
-  final String topicId;
-  final String topicName;
-  final int pageReference;
-  final String? diagramUrl;
   final String? hint;
 
-  QuestionModel({
+  Question({
     required this.id,
     required this.questionNumber,
     required this.type,
-    required this.text,
+    required this.questionText,
     this.options,
     this.correctAnswer,
-    this.markingScheme,
     required this.marks,
-    required this.difficulty,
-    required this.topicId,
-    required this.topicName,
-    required this.pageReference,
-    this.diagramUrl,
     this.hint,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'questionNumber': questionNumber,
-      'type': type.toString(),
-      'text': text,
-      'options': options,
-      'correctAnswer': correctAnswer,
-      'markingScheme': markingScheme,
-      'marks': marks,
-      'difficulty': difficulty.toString(),
-      'topicId': topicId,
-      'topicName': topicName,
-      'pageReference': pageReference,
-      'diagramUrl': diagramUrl,
-      'hint': hint,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'questionNumber': questionNumber,
+    'type': type.name,
+    'questionText': questionText,
+    'options': options,
+    'correctAnswer': correctAnswer,
+    'marks': marks,
+    'hint': hint,
+  };
 
-  factory QuestionModel.fromMap(Map<String, dynamic> map) {
-    return QuestionModel(
-      id: map['id'] ?? '',
-      questionNumber: map['questionNumber'] ?? 0,
-      type: QuestionType.values.firstWhere(
-            (e) => e.toString() == map['type'],
-        orElse: () => QuestionType.mcq,
-      ),
-      text: map['text'] ?? '',
-      options: map['options'] != null ? List<String>.from(map['options']) : null,
-      correctAnswer: map['correctAnswer'],
-      markingScheme: map['markingScheme'],
-      marks: map['marks'] ?? 0,
-      difficulty: DifficultyLevel.values.firstWhere(
-            (e) => e.toString() == map['difficulty'],
-        orElse: () => DifficultyLevel.medium,
-      ),
-      topicId: map['topicId'] ?? '',
-      topicName: map['topicName'] ?? '',
-      pageReference: map['pageReference'] ?? 0,
-      diagramUrl: map['diagramUrl'],
-      hint: map['hint'],
-    );
-  }
+  factory Question.fromJson(Map<String, dynamic> json) => Question(
+    id: json['id'] ?? '',
+    questionNumber: json['questionNumber'] ?? 0,
+    type: QuestionType.values.firstWhere(
+          (e) => e.name == json['type'],
+      orElse: () => QuestionType.mcq,
+    ),
+    questionText: json['questionText'] ?? '',
+    options: json['options'] != null ? List<String>.from(json['options']) : null,
+    correctAnswer: json['correctAnswer'],
+    marks: json['marks'] ?? 0,
+    hint: json['hint'],
+  );
 }
 
-/// Student submission model for worksheet attempts
-class StudentSubmissionModel {
-  final String id;
-  final String worksheetId;
-  final String worksheetTitle;
+class WorksheetSubmission {
   final String studentId;
   final String studentName;
-  final List<StudentAnswer> answers;
-  final DateTime? submittedAt;
-  final int? marksObtained;
+  final DateTime submittedAt;
+  final int score;
   final int totalMarks;
-  final SubmissionStatus status;
-  final String? teacherFeedback;
-  final DateTime? gradedAt;
-  final String? gradedBy;
-  final double? percentage;
-  final String? grade; // A*, A, B, C, etc.
+  final List<Map<String, dynamic>> answers;
+  final int timeTaken; // in seconds
 
-  StudentSubmissionModel({
-    required this.id,
-    required this.worksheetId,
-    required this.worksheetTitle,
+  WorksheetSubmission({
     required this.studentId,
     required this.studentName,
-    required this.answers,
-    this.submittedAt,
-    this.marksObtained,
+    required this.submittedAt,
+    required this.score,
     required this.totalMarks,
-    this.status = SubmissionStatus.pending,
-    this.teacherFeedback,
-    this.gradedAt,
-    this.gradedBy,
-    this.percentage,
-    this.grade,
+    required this.answers,
+    required this.timeTaken,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'worksheetId': worksheetId,
-      'worksheetTitle': worksheetTitle,
-      'studentId': studentId,
-      'studentName': studentName,
-      'answers': answers.map((a) => a.toMap()).toList(),
-      'submittedAt': submittedAt,
-      'marksObtained': marksObtained,
-      'totalMarks': totalMarks,
-      'status': status.toString(),
-      'teacherFeedback': teacherFeedback,
-      'gradedAt': gradedAt,
-      'gradedBy': gradedBy,
-      'percentage': percentage,
-      'grade': grade,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'studentId': studentId,
+    'studentName': studentName,
+    'submittedAt': Timestamp.fromDate(submittedAt),
+    'score': score,
+    'totalMarks': totalMarks,
+    'answers': answers,
+    'timeTaken': timeTaken,
+  };
 
-  factory StudentSubmissionModel.fromMap(Map<String, dynamic> map) {
-    return StudentSubmissionModel(
-      id: map['id'] ?? '',
-      worksheetId: map['worksheetId'] ?? '',
-      worksheetTitle: map['worksheetTitle'] ?? '',
-      studentId: map['studentId'] ?? '',
-      studentName: map['studentName'] ?? '',
-      answers: (map['answers'] as List?)
-          ?.map((a) => StudentAnswer.fromMap(a))
-          .toList() ??
-          [],
-      submittedAt: map['submittedAt'] != null
-          ? (map['submittedAt'] as Timestamp).toDate()
-          : null,
-      marksObtained: map['marksObtained'],
-      totalMarks: map['totalMarks'] ?? 0,
-      status: SubmissionStatus.values.firstWhere(
-            (e) => e.toString() == map['status'],
-        orElse: () => SubmissionStatus.pending,
-      ),
-      teacherFeedback: map['teacherFeedback'],
-      gradedAt: map['gradedAt'] != null
-          ? (map['gradedAt'] as Timestamp).toDate()
-          : null,
-      gradedBy: map['gradedBy'],
-      percentage: map['percentage']?.toDouble(),
-      grade: map['grade'],
-    );
-  }
+  factory WorksheetSubmission.fromJson(Map<String, dynamic> json) =>
+      WorksheetSubmission(
+        studentId: json['studentId'] ?? '',
+        studentName: json['studentName'] ?? '',
+        submittedAt: (json['submittedAt'] as Timestamp).toDate(),
+        score: json['score'] ?? 0,
+        totalMarks: json['totalMarks'] ?? 0,
+        answers: List<Map<String, dynamic>>.from(json['answers'] ?? []),
+        timeTaken: json['timeTaken'] ?? 0,
+      );
 }
 
-/// Student answer model
-class StudentAnswer {
-  final String questionId;
-  final int questionNumber;
-  final String answer;
-  final List<String>? attachmentUrls; // For image uploads
-  final int? marksAwarded;
-  final String? feedback;
-  final bool? isCorrect; // For auto-graded questions
+// ========================================
+// ENUMS
+// ========================================
 
-  StudentAnswer({
-    required this.questionId,
-    required this.questionNumber,
-    required this.answer,
-    this.attachmentUrls,
-    this.marksAwarded,
-    this.feedback,
-    this.isCorrect,
-  });
+enum QuestionType {
+  mcq,
+  trueFalse,
+  fillInTheBlank,
+  shortAnswer,
+  longAnswer,
+}
+// In worksheet_generator_model.dart
 
-  Map<String, dynamic> toMap() {
-    return {
-      'questionId': questionId,
-      'questionNumber': questionNumber,
-      'answer': answer,
-      'attachmentUrls': attachmentUrls,
-      'marksAwarded': marksAwarded,
-      'feedback': feedback,
-      'isCorrect': isCorrect,
-    };
-  }
-
-  factory StudentAnswer.fromMap(Map<String, dynamic> map) {
-    return StudentAnswer(
-      questionId: map['questionId'] ?? '',
-      questionNumber: map['questionNumber'] ?? 0,
-      answer: map['answer'] ?? '',
-      attachmentUrls: map['attachmentUrls'] != null
-          ? List<String>.from(map['attachmentUrls'])
-          : null,
-      marksAwarded: map['marksAwarded'],
-      feedback: map['feedback'],
-      isCorrect: map['isCorrect'],
-    );
-  }
+enum DifficultyLevel {
+  easy,
+  medium,
+  hard,
 }
 
-// Enums
-enum ProcessingStatus { pending, processing, completed, failed }
+// ========================================
+// ENUMS
+// ========================================
 
-enum DifficultyLevel { easy, medium, hard }
 
-enum QuestionType { mcq, shortAnswer, longAnswer, trueFalse, fillInBlanks }
+enum WorksheetType {
+  practice,      // Practice worksheets for self-study
+  homework,      // Homework assignments
+  classwork,     // In-class worksheets
+  test,          // Formal tests/exams
+  quiz,          // Short quizzes
+  revision,      // Revision/review materials
+}
+// ========================================
+// BACKWARD COMPATIBILITY ALIASES
+// ========================================
 
-enum WorksheetType { practice, assessment, homework, test, mock }
-
-enum WorksheetStatus { draft, published, archived }
-
-enum SubmissionStatus { pending, submitted, graded }
+// These allow old code to still work
+typedef TextbookModel = Textbook;
+typedef ChapterModel = Chapter;
+typedef TopicModel = Topic;
+typedef QuestionModel = Question;

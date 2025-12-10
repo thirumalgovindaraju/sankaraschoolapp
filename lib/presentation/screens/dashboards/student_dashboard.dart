@@ -1,5 +1,5 @@
 // lib/presentation/screens/dashboards/student_dashboard.dart
-// FIXED VERSION - Uses email for notification fetching
+// ✅ FIXED VERSION - Removed references to non-existent properties
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,10 +7,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/academic_provider.dart';
 import '../../providers/announcement_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/worksheet_generator_provider.dart';
 import '../../widgets/dashboard/attendance_summary_card.dart';
 import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/notification_badge.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/models/worksheet_generator_model.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../providers/attendance_provider.dart';
 
@@ -25,13 +27,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
   @override
   void initState() {
     super.initState();
-    // Delay loading until after the first frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboardData();
     });
   }
 
-  /// Load all dashboard data
   Future<void> _loadDashboardData() async {
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.currentUser;
@@ -39,21 +39,17 @@ class _StudentDashboardState extends State<StudentDashboard> {
     if (user == null) return;
 
     final userId = user.id;
-    final userEmail = user.email; // ✅ FIXED: Changed from 'mail' to 'userEmail'
+    final userEmail = user.email;
     final userRole = user.role?.name ?? 'student';
 
     await Future.wait([
-      // ✅ Fetch announcements with role filtering
       context.read<AnnouncementProvider>().fetchAnnouncements(
         userRole: userRole,
-        userId: userEmail, // Use email for announcements too
+        userId: userEmail,
       ),
-
-      // ✅ CRITICAL FIX: Use email instead of ID for notifications
       context.read<NotificationProvider>().fetchNotificationsForStudent(userEmail),
-
-      // ✅ Fetch attendance summary (still uses student ID)
       context.read<AcademicProvider>().fetchAttendanceSummary(userId),
+      context.read<WorksheetGeneratorProvider>().loadWorksheets(),
     ]);
   }
 
@@ -89,12 +85,33 @@ class _StudentDashboardState extends State<StudentDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome Section
               _buildWelcomeCard(user?.name ?? 'Student'),
               const SizedBox(height: 20),
-
-              // Quick Actions
               _buildQuickActions(context),
+              const SizedBox(height: 20),
+
+              // ✅ MY WORKSHEETS SECTION (SIMPLIFIED - no submissions check)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'My Worksheets',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Student worksheets feature coming soon')),
+                      );
+                    },
+                    child: const Text('View All'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildWorksheetSection(user),
               const SizedBox(height: 20),
 
               // My Attendance Section
@@ -152,7 +169,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
               ),
               const SizedBox(height: 20),
 
-              // Academic Performance
               _buildAcademicPerformance(context),
               const SizedBox(height: 20),
 
@@ -205,6 +221,183 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
+  // ✅ SIMPLIFIED WORKSHEET SECTION - No submissions check
+  Widget _buildWorksheetSection(UserModel? user) {
+    if (user == null) return const SizedBox.shrink();
+
+    return Consumer<WorksheetGeneratorProvider>(
+      builder: (context, worksheetProvider, child) {
+        if (worksheetProvider.isLoading) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        // ✅ SIMPLIFIED: Just filter by assigned students/classes
+        // TODO: Add classId to UserModel later for proper filtering
+        final myWorksheets = worksheetProvider.worksheets.where((worksheet) {
+          final assignedToStudent = worksheet.assignedToStudents?.contains(user.id) ?? false;
+          // Can't check classId until it's added to UserModel
+          return assignedToStudent;
+        }).toList();
+
+        if (myWorksheets.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                children: [
+                  Icon(Icons.description_outlined, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No worksheets assigned yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Check back later for new assignments',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Show recent 3 worksheets
+        final recentWorksheets = myWorksheets.take(3).toList();
+
+        return Column(
+          children: recentWorksheets.map((worksheet) {
+            return Card(
+              elevation: 2,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Worksheet attempt feature coming soon')),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.purple[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.description,
+                              color: Colors.purple[700],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  worksheet.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  //worksheet.textbookTitle,
+                                  worksheet.textbookTitle ?? 'Unknown Textbook',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'Pending',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _buildWorksheetStat(
+                            Icons.quiz,
+                            '${worksheet.questions.length} Qs',
+                            Colors.blue,
+                          ),
+                          const SizedBox(width: 16),
+                          _buildWorksheetStat(
+                            Icons.star,
+                            '${worksheet.totalMarks} marks',
+                            Colors.orange,
+                          ),
+                          const SizedBox(width: 16),
+                          _buildWorksheetStat(
+                            Icons.timer,
+                            '${worksheet.durationMinutes} min',
+                            Colors.green,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildWorksheetStat(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildWelcomeCard(String name) {
     return Card(
       elevation: 2,
@@ -227,9 +420,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Welcome back,',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
               ),
@@ -244,9 +437,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'Ready to learn something new today?',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
               ),
@@ -288,19 +481,19 @@ class _StudentDashboardState extends State<StudentDashboard> {
               onTap: () => Navigator.pushNamed(context, '/grades'),
             ),
             _buildActionCard(
-              icon: Icons.assignment,
-              label: 'Assignments',
-              color: Colors.orange,
+              icon: Icons.description,
+              label: 'Worksheets',
+              color: Colors.purple,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Assignments feature coming soon')),
+                  const SnackBar(content: Text('Student worksheets feature coming soon')),
                 );
               },
             ),
             _buildActionCard(
               icon: Icons.event,
               label: 'Events',
-              color: Colors.purple,
+              color: Colors.orange,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Events feature coming soon')),

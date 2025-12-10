@@ -2,9 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../data/models/worksheet_generator_model.dart';
+import '../../../data/services/worksheet_generator_service.dart';
 import '../../providers/worksheet_generator_provider.dart';
 import '../../providers/auth_provider.dart';
+import '/data/services/pdf_processor_service.dart';
+
 
 class UploadTextbookDialog extends StatefulWidget {
   const UploadTextbookDialog({super.key});
@@ -24,6 +29,7 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
   String _selectedGrade = 'Year 10';
 
   bool _isUploading = false;
+  PlatformFile? _selectedFile; // ✅ ADDED
 
   // Subjects list
   final List<String> _subjects = [
@@ -87,6 +93,38 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
     super.dispose();
   }
 
+  // ✅ ADDED: File picker method
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true, // Important for web
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedFile = result.files.first;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Selected: ${_selectedFile!.name}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error selecting file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -129,6 +167,52 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
                     ],
                   ),
                   const SizedBox(height: 24),
+
+                  // ✅ ADDED: File selection card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _selectedFile != null ? Colors.green[50] : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _selectedFile != null ? Colors.green : Colors.grey[300]!,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _selectedFile != null ? Icons.check_circle : Icons.attach_file,
+                          color: _selectedFile != null ? Colors.green : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedFile != null ? _selectedFile!.name : 'No file selected',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedFile != null ? Colors.green[900] : Colors.grey[700],
+                                ),
+                              ),
+                              if (_selectedFile != null)
+                                Text(
+                                  '${(_selectedFile!.size / 1024 / 1024).toStringAsFixed(2)} MB',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                            ],
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _pickFile,
+                          icon: const Icon(Icons.folder_open),
+                          label: Text(_selectedFile != null ? 'Change' : 'Browse'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
                   // Textbook Title
                   TextFormField(
@@ -305,8 +389,9 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
                           ),
                         )
                             : const Icon(Icons.upload_file),
-                        label: Text(_isUploading ? 'Uploading...' : 'Select & Upload PDF'),
+                        label: Text(_isUploading ? 'Uploading...' : 'Upload PDF'),
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple[700],
                           padding: const EdgeInsets.symmetric(
                             horizontal: 24,
                             vertical: 12,
@@ -376,22 +461,37 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
   }
 
   Future<void> _handleUpload() async {
+    // Validate form
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Please select a PDF file'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
     setState(() => _isUploading = true);
 
     try {
-      final provider = context.read<WorksheetGeneratorProvider>();
+      // Upload using the service
+      // Get current user for uploadedBy
       final authProvider = context.read<AuthProvider>();
+      final currentUserId = authProvider.currentUser?.id ?? 'unknown';
 
-      final success = await provider.uploadTextbook(
+// Call PDFProcessorService directly - it will pick the file
+      final textbook = await PDFProcessorService.uploadTextbookWithFile(
+        file: _selectedFile!,
         title: _titleController.text.trim(),
         subject: _selectedSubject,
         board: _selectedBoard,
         grade: _selectedGrade,
-        uploadedBy: authProvider.user?.id ?? 'unknown',
+        uploadedBy: currentUserId,
         publisher: _publisherController.text.trim().isEmpty
             ? null
             : _publisherController.text.trim(),
@@ -400,64 +500,73 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
             : _editionController.text.trim(),
       );
 
-      if (mounted) {
-        setState(() => _isUploading = false);
+      if (!mounted) return;
 
-        if (success) {
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Textbook uploaded successfully! Processing in background...',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 5),
-            ),
-          );
+      setState(() => _isUploading = false);
 
-          // Close dialog
-          Navigator.pop(context, true);
-
-          // Show processing info dialog
-          _showProcessingInfoDialog();
-        } else {
-          // Show error
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      provider.error ?? 'Upload failed. Please try again.',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isUploading = false);
+      if (textbook != null) {
+        // Success!
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('✅ ${textbook.title} uploaded successfully!'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
+
+        // Close dialog and return textbook
+        Navigator.pop(context, textbook);
+
+        // Show processing info
+        _showProcessingInfoDialog();
+      } else {
+        throw Exception('Upload returned null');
       }
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isUploading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('❌ Firebase Error: ${e.code}'),
+              if (e.message != null)
+                Text(e.message!, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isUploading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Upload failed: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _handleUpload(),
+          ),
+        ),
+      );
     }
   }
 
@@ -514,7 +623,6 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              // Refresh the textbooks list
               context.read<WorksheetGeneratorProvider>().loadTextbooks();
             },
             icon: const Icon(Icons.refresh),

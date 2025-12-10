@@ -1,97 +1,85 @@
 // lib/data/services/worksheet_generator_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/worksheet_generator_model.dart';
 import 'gemini_ai_service.dart';
+import 'pdf_processor_service.dart';
 
 class WorksheetGeneratorService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Generate worksheet questions using AI
+  /// Generate worksheet with AI-powered questions
   static Future<WorksheetModel?> generateWorksheet({
     required String title,
-    required TextbookModel textbook,
-    required List<TopicModel> selectedTopics,
+    required Textbook textbook,
+    required List<Topic> selectedTopics,
     required int mcqCount,
     required int shortAnswerCount,
     required int longAnswerCount,
-    required DifficultyLevel difficulty,
+    required String difficulty,
     required int durationMinutes,
     required String createdBy,
     required String createdByName,
-    required WorksheetType type,
+    required String type,
   }) async {
     try {
-      print('🎯 Generating worksheet...');
+      if (kDebugMode) print('🔄 Generating worksheet: $title');
 
-      List<QuestionModel> allQuestions = [];
-      int totalMarks = 0;
+      List<Question> allQuestions = [];
+      int questionNumber = 1;
 
       // Generate questions for each selected topic
       for (var topic in selectedTopics) {
-        print('📝 Generating questions for: ${topic.name}');
+        if (kDebugMode) print('📝 Generating questions for: ${topic.name}');
 
-        // Get topic content (in real app, fetch from stored chapter text)
-        final topicContent = topic.description + '\n' + topic.keywords.join(', ');
+        // Get relevant content for this topic (simplified - you might want to enhance this)
+        String topicContent = '''
+Topic: ${topic.name}
+Description: ${topic.description}
+Keywords: ${topic.keywords.join(', ')}
+        ''';
 
         // Calculate questions per topic (distribute evenly)
-        final mcqPerTopic = (mcqCount / selectedTopics.length).ceil();
-        final shortPerTopic = (shortAnswerCount / selectedTopics.length).ceil();
-        final longPerTopic = (longAnswerCount / selectedTopics.length).ceil();
+        int topicMcq = (mcqCount / selectedTopics.length).round();
+        int topicShort = (shortAnswerCount / selectedTopics.length).round();
+        int topicLong = (longAnswerCount / selectedTopics.length).round();
 
-        // Generate questions using AI
+        // Generate questions using Gemini AI
         final questions = await GeminiAIService.generateQuestions(
           topic: topic,
           topicContent: topicContent,
-          mcqCount: mcqPerTopic,
-          shortAnswerCount: shortPerTopic,
-          longAnswerCount: longPerTopic,
-          difficulty: difficulty,
+          mcqCount: topicMcq,
+          shortAnswerCount: topicShort,
+          longAnswerCount: topicLong,
         );
 
-        allQuestions.addAll(questions);
+        // Renumber questions sequentially
+        for (var question in questions) {
+          allQuestions.add(Question(
+            id: question.id,
+            questionNumber: questionNumber++,
+            type: question.type,
+            questionText: question.questionText,
+            options: question.options,
+            correctAnswer: question.correctAnswer,
+            marks: question.marks,
+            hint: question.hint,
+          ));
+        }
       }
 
-      // Shuffle and limit to requested counts
-      allQuestions.shuffle();
-      final mcqs = allQuestions
-          .where((q) => q.type == QuestionType.mcq)
-          .take(mcqCount)
-          .toList();
-      final shortAnswers = allQuestions
-          .where((q) => q.type == QuestionType.shortAnswer)
-          .take(shortAnswerCount)
-          .toList();
-      final longAnswers = allQuestions
-          .where((q) => q.type == QuestionType.longAnswer)
-          .take(longAnswerCount)
-          .toList();
-
-      final finalQuestions = [...mcqs, ...shortAnswers, ...longAnswers];
-
-      // Renumber questions
-      for (int i = 0; i < finalQuestions.length; i++) {
-        finalQuestions[i] = QuestionModel(
-          id: finalQuestions[i].id,
-          questionNumber: i + 1,
-          type: finalQuestions[i].type,
-          text: finalQuestions[i].text,
-          options: finalQuestions[i].options,
-          correctAnswer: finalQuestions[i].correctAnswer,
-          markingScheme: finalQuestions[i].markingScheme,
-          marks: finalQuestions[i].marks,
-          difficulty: finalQuestions[i].difficulty,
-          topicId: finalQuestions[i].topicId,
-          topicName: finalQuestions[i].topicName,
-          pageReference: finalQuestions[i].pageReference,
-          diagramUrl: finalQuestions[i].diagramUrl,
-          hint: finalQuestions[i].hint,
-        );
-        totalMarks += finalQuestions[i].marks;
+      if (allQuestions.isEmpty) {
+        if (kDebugMode) print('❌ No questions generated');
+        return null;
       }
+
+      // Calculate total marks
+      int totalMarks = allQuestions.fold(0, (sum, q) => sum + q.marks);
 
       // Create worksheet model
       final worksheetId = 'worksheet_${DateTime.now().millisecondsSinceEpoch}';
@@ -102,16 +90,13 @@ class WorksheetGeneratorService {
         textbookTitle: textbook.title,
         topicIds: selectedTopics.map((t) => t.id).toList(),
         topicNames: selectedTopics.map((t) => t.name).toList(),
-        questions: finalQuestions,
+        questions: allQuestions,
         totalMarks: totalMarks,
         durationMinutes: durationMinutes,
         createdAt: DateTime.now(),
         createdBy: createdBy,
         createdByName: createdByName,
-        assignedToStudents: [],
-        assignedToClasses: [],
-        type: type,
-        status: WorksheetStatus.draft,
+        status: 'draft',
         overallDifficulty: difficulty,
       );
 
@@ -119,322 +104,170 @@ class WorksheetGeneratorService {
       await _firestore
           .collection('worksheets')
           .doc(worksheetId)
-          .set(worksheet.toMap());
+          .set(worksheet.toJson());
 
-      print('✅ Worksheet generated: ${finalQuestions.length} questions, $totalMarks marks');
+      if (kDebugMode) {
+        print('✅ Worksheet generated successfully');
+        print('📊 Total questions: ${allQuestions.length}');
+        print('📊 Total marks: $totalMarks');
+      }
 
       return worksheet;
-    } catch (e) {
-      print('❌ Error generating worksheet: $e');
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('❌ Error generating worksheet: $e');
+        print('Stack trace: $stackTrace');
+      }
       return null;
     }
   }
 
-  /// Generate PDF from worksheet
-  static Future<void> generateAndPrintPDF(WorksheetModel worksheet) async {
-    final pdf = pw.Document();
-
-    // Add worksheet pages
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.all(32),
-        build: (context) => [
-          // Header
-          _buildHeader(worksheet),
-          pw.SizedBox(height: 20),
-
-          // Instructions
-          _buildInstructions(worksheet),
-          pw.SizedBox(height: 20),
-
-          // Questions
-          ..._buildQuestions(worksheet),
-        ],
-      ),
-    );
-
-    // Add marking scheme page
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.all(32),
-        build: (context) => [
-          pw.Header(
-            level: 0,
-            child: pw.Text(
-              'MARKING SCHEME (For Teacher Use Only)',
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 20),
-          ..._buildMarkingScheme(worksheet),
-        ],
-      ),
-    );
-
-    // Print or save PDF
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdf.save(),
-    );
-  }
-
-  /// Build PDF header
-  static pw.Widget _buildHeader(WorksheetModel worksheet) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Center(
-          child: pw.Text(
-            'SRI SANKARA GLOBAL SCHOOL - IGCSE',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
-        ),
-        pw.SizedBox(height: 5),
-        pw.Center(
-          child: pw.Text(
-            worksheet.title.toUpperCase(),
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-          ),
-        ),
-        pw.Divider(),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('Student Name: ___________________'),
-            pw.Text('Date: __________'),
-          ],
-        ),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('Class: ___________'),
-            pw.Text('Duration: ${worksheet.durationMinutes} minutes'),
-          ],
-        ),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('Total Marks: ${worksheet.totalMarks}'),
-            pw.Text('Pass Marks: ${(worksheet.totalMarks * 0.5).round()}'),
-          ],
-        ),
-        pw.Divider(),
-      ],
-    );
-  }
-
-  /// Build instructions
-  static pw.Widget _buildInstructions(WorksheetModel worksheet) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'INSTRUCTIONS:',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 5),
-        pw.Bullet(text: 'Read all questions carefully before answering'),
-        pw.Bullet(text: 'Answer all questions in the spaces provided'),
-        pw.Bullet(text: 'Show all your working for full marks'),
-        pw.Bullet(text: 'Calculators are permitted'),
-        pw.SizedBox(height: 10),
-      ],
-    );
-  }
-
-  /// Build questions
-  static List<pw.Widget> _buildQuestions(WorksheetModel worksheet) {
-    List<pw.Widget> widgets = [];
-
-    // Group by type
-    final mcqs = worksheet.questions
-        .where((q) => q.type == QuestionType.mcq)
-        .toList();
-    final shortAnswers = worksheet.questions
-        .where((q) => q.type == QuestionType.shortAnswer)
-        .toList();
-    final longAnswers = worksheet.questions
-        .where((q) => q.type == QuestionType.longAnswer)
-        .toList();
-
-    // Section A: MCQs
-    if (mcqs.isNotEmpty) {
-      widgets.add(pw.Header(
-        level: 1,
-        child: pw.Text(
-          'SECTION A: MULTIPLE CHOICE (${mcqs.length} questions × ${mcqs.first.marks} marks = ${mcqs.length * mcqs.first.marks} marks)',
-        ),
-      ));
-      widgets.add(pw.Text('Select the correct answer.'));
-      widgets.add(pw.SizedBox(height: 10));
-
-      for (var q in mcqs) {
-        widgets.add(_buildMCQ(q));
-        widgets.add(pw.SizedBox(height: 10));
-      }
-    }
-
-    // Section B: Short Answers
-    if (shortAnswers.isNotEmpty) {
-      widgets.add(pw.SizedBox(height: 20));
-      widgets.add(pw.Header(
-        level: 1,
-        child: pw.Text(
-          'SECTION B: SHORT ANSWER (${shortAnswers.length} questions × ${shortAnswers.first.marks} marks = ${shortAnswers.length * shortAnswers.first.marks} marks)',
-        ),
-      ));
-      widgets.add(pw.Text('Show your working.'));
-      widgets.add(pw.SizedBox(height: 10));
-
-      for (var q in shortAnswers) {
-        widgets.add(_buildShortAnswer(q));
-        widgets.add(pw.SizedBox(height: 20));
-      }
-    }
-
-    // Section C: Long Answers
-    if (longAnswers.isNotEmpty) {
-      widgets.add(pw.SizedBox(height: 20));
-      widgets.add(pw.Header(
-        level: 1,
-        child: pw.Text(
-          'SECTION C: LONG ANSWER (${longAnswers.length} questions × ${longAnswers.first.marks} marks = ${longAnswers.length * longAnswers.first.marks} marks)',
-        ),
-      ));
-      widgets.add(pw.Text('Show all steps clearly.'));
-      widgets.add(pw.SizedBox(height: 10));
-
-      for (var q in longAnswers) {
-        widgets.add(_buildLongAnswer(q));
-        widgets.add(pw.SizedBox(height: 30));
-      }
-    }
-
-    return widgets;
-  }
-
-  /// Build MCQ question
-  static pw.Widget _buildMCQ(QuestionModel q) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          '${q.questionNumber}. ${q.text}',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 5),
-        ...?q.options?.map((option) => pw.Text('   $option')),
-        pw.SizedBox(height: 3),
-        pw.Text(
-          '[Difficulty: ${q.difficulty.toString().split('.').last} | Topic: ${q.topicName} | Ref: Page ${q.pageReference}]',
-          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-        ),
-      ],
-    );
-  }
-
-  /// Build short answer question
-  static pw.Widget _buildShortAnswer(QuestionModel q) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          '${q.questionNumber}. ${q.text}',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 5),
-        pw.Container(
-          height: 80,
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey300),
-          ),
-          child: pw.Padding(
-            padding: pw.EdgeInsets.all(5),
-            child: pw.Text('[Space for working]'),
-          ),
-        ),
-        pw.SizedBox(height: 3),
-        pw.Text('Answer: _______________'),
-        pw.Text(
-          '[Difficulty: ${q.difficulty.toString().split('.').last} | Topic: ${q.topicName} | Ref: Page ${q.pageReference}]',
-          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-        ),
-      ],
-    );
-  }
-
-  /// Build long answer question
-  static pw.Widget _buildLongAnswer(QuestionModel q) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          '${q.questionNumber}. ${q.text}',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 5),
-        pw.Container(
-          height: 150,
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey300),
-          ),
-          child: pw.Padding(
-            padding: pw.EdgeInsets.all(5),
-            child: pw.Text('[Large space for working]'),
-          ),
-        ),
-        pw.SizedBox(height: 3),
-        pw.Text(
-          '[Difficulty: ${q.difficulty.toString().split('.').last} | Topic: ${q.topicName} | Ref: Page ${q.pageReference}]',
-          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-        ),
-      ],
-    );
-  }
-
-  /// Build marking scheme
-  static List<pw.Widget> _buildMarkingScheme(WorksheetModel worksheet) {
-    List<pw.Widget> widgets = [];
-
-    for (var q in worksheet.questions) {
-      widgets.add(
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              '${q.questionNumber}. ${q.text}',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 5),
-            if (q.type == QuestionType.mcq)
-              pw.Text('Answer: ${q.correctAnswer}')
-            else
-              pw.Text(q.markingScheme ?? 'Detailed marking scheme'),
-            pw.SizedBox(height: 10),
-            pw.Divider(),
-          ],
-        ),
-      );
-    }
-
-    return widgets;
-  }
-
-  /// Get all worksheets
-  static Future<List<WorksheetModel>> getWorksheets() async {
+  /// Fetch all worksheets
+  static Future<List<WorksheetModel>> fetchWorksheets() async {
     try {
+      if (kDebugMode) print('📚 Fetching worksheets...');
+
       final snapshot = await _firestore
           .collection('worksheets')
           .orderBy('createdAt', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) => WorksheetModel.fromMap(doc.data()))
+      final worksheets = snapshot.docs
+          .map((doc) => WorksheetModel.fromJson(doc.data()))
           .toList();
+
+      if (kDebugMode) print('✅ Fetched ${worksheets.length} worksheets');
+      return worksheets;
     } catch (e) {
-      print('❌ Error fetching worksheets: $e');
+      if (kDebugMode) print('❌ Error fetching worksheets: $e');
       return [];
+    }
+  }
+
+  /// Fetch worksheet by ID
+  static Future<WorksheetModel?> fetchWorksheetById(String id) async {
+    try {
+      final doc = await _firestore.collection('worksheets').doc(id).get();
+      if (doc.exists) {
+        return WorksheetModel.fromJson(doc.data()!);
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error fetching worksheet: $e');
+      return null;
+    }
+  }
+
+  /// Generate and print PDF
+  static Future<void> generateAndPrintPDF(WorksheetModel worksheet) async {
+    try {
+      if (kDebugMode) print('📄 Generating PDF for: ${worksheet.title}');
+
+      final pdf = pw.Document();
+
+      // Add pages to PDF
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (context) => [
+            // Header
+            pw.Header(
+              level: 0,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    worksheet.title,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Total Marks: ${worksheet.totalMarks}'),
+                      pw.Text('Duration: ${worksheet.durationMinutes} minutes'),
+                    ],
+                  ),
+                  pw.Divider(thickness: 2),
+                  pw.SizedBox(height: 16),
+                ],
+              ),
+            ),
+
+            // Questions
+            ...worksheet.questions.map((question) {
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 16),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Question text
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'Q${question.questionNumber}. ',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.Expanded(
+                          child: pw.Text(question.questionText),
+                        ),
+                        pw.Text(
+                          '[${question.marks} marks]',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontStyle: pw.FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 8),
+
+                    // Options for MCQ
+                    if (question.type == QuestionType.mcq &&
+                        question.options != null)
+                      ...question.options!.map((option) {
+                        return pw.Padding(
+                          padding: const pw.EdgeInsets.only(left: 20, top: 4),
+                          child: pw.Text(option),
+                        );
+                      }),
+
+                    // Answer space for non-MCQ
+                    if (question.type != QuestionType.mcq)
+                      pw.Container(
+                        margin: const pw.EdgeInsets.only(left: 20, top: 8),
+                        height: question.type == QuestionType.longAnswer
+                            ? 100
+                            : 40,
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: PdfColors.grey300),
+                        ),
+                      ),
+
+                    pw.SizedBox(height: 16),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+
+      // Print or save PDF
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: '${worksheet.title}.pdf',
+      );
+
+      if (kDebugMode) print('✅ PDF generated successfully');
+    } catch (e) {
+      if (kDebugMode) print('❌ Error generating PDF: $e');
+      rethrow;
     }
   }
 
@@ -445,17 +278,88 @@ class WorksheetGeneratorService {
     List<String>? classIds,
   }) async {
     try {
+      if (kDebugMode) print('📤 Assigning worksheet: $worksheetId');
+
       await _firestore.collection('worksheets').doc(worksheetId).update({
-        if (studentIds != null) 'assignedToStudents': studentIds,
-        if (classIds != null) 'assignedToClasses': classIds,
-        'status': WorksheetStatus.published.toString(),
+        'assignedToStudents': studentIds ?? [],
+        'assignedToClasses': classIds ?? [],
+        'status': 'published',
       });
 
-      print('✅ Worksheet assigned');
+      if (kDebugMode) print('✅ Worksheet assigned successfully');
       return true;
     } catch (e) {
-      print('❌ Error assigning worksheet: $e');
+      if (kDebugMode) print('❌ Error assigning worksheet: $e');
       return false;
+    }
+  }
+
+  /// Submit worksheet answers
+  static Future<bool> submitWorksheet(
+      String worksheetId,
+      WorksheetSubmission submission,
+      ) async {
+    try {
+      if (kDebugMode) print('📥 Submitting worksheet: $worksheetId');
+
+      final worksheet = await fetchWorksheetById(worksheetId);
+      if (worksheet == null) return false;
+
+      final submissions = worksheet.submissions ?? [];
+      submissions.add(submission);
+
+      await _firestore.collection('worksheets').doc(worksheetId).update({
+        'submissions': submissions.map((s) => s.toJson()).toList(),
+      });
+
+      if (kDebugMode) print('✅ Worksheet submitted successfully');
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error submitting worksheet: $e');
+      return false;
+    }
+  }
+
+  /// Delete worksheet
+  static Future<bool> deleteWorksheet(String worksheetId) async {
+    try {
+      await _firestore.collection('worksheets').doc(worksheetId).delete();
+      if (kDebugMode) print('✅ Worksheet deleted');
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error deleting worksheet: $e');
+      return false;
+    }
+  }
+
+  /// Upload textbook (delegates to PDFProcessorService)
+  static Future<Textbook?> uploadTextbook({
+    required String title,
+    required String subject,
+    required String board,
+    required String grade,
+    required PlatformFile file,
+    String? publisher,
+    String? edition,
+  }) async {
+    try {
+      if (kDebugMode) print('📤 Uploading textbook via PDFProcessorService...');
+
+      // Delegate to PDFProcessorService which handles the actual upload
+      final textbook = await PDFProcessorService.uploadTextbook(
+        title: title,
+        subject: subject,
+        board: board,
+        grade: grade,
+        uploadedBy: 'current_user', // You may want to pass this as a parameter
+        publisher: publisher,
+        edition: edition,
+      );
+
+      return textbook;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error in uploadTextbook: $e');
+      return null;
     }
   }
 }

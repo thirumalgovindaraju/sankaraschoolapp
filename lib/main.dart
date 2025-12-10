@@ -1,5 +1,5 @@
 // lib/main.dart
-// ✅ FIXED VERSION - Removed duplicate closing parenthesis
+// Complete version with Firebase Auth initialization
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -23,13 +23,14 @@ import 'presentation/providers/worksheet_submission_provider.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/services/data_initialization_service.dart';
+import 'data/services/test_users_loader.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Initialize Firebase FIRST before anything else
+  // ✅ Step 1: Initialize Firebase FIRST
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -39,11 +40,27 @@ void main() async {
     debugPrint('❌ Firebase initialization error: $e');
   }
 
-  // ✅ DON'T AWAIT - Start initialization in background
-  // This allows the app UI to render immediately while data loads
+  // ✅ Step 2: Initialize test Firebase Auth users
+  // Option A: Load ALL test users from TestDataService (comprehensive)
+  try {
+    await TestUsersLoader.loadAllTestUsers();
+    debugPrint('✅ All test users loaded into Firebase Auth');
+  } catch (e) {
+    debugPrint('❌ Error loading all test users: $e');
+  }
+
+  // Option B: Or use the faster common users method (uncomment if Option A is too slow)
+  // try {
+  //   await TestUsersLoader.initializeCommonTestUsers();
+  //   debugPrint('✅ Common test users initialized');
+  // } catch (e) {
+  //   debugPrint('❌ Error initializing common test users: $e');
+  // }
+
+  // ✅ Step 3: Initialize data in background (non-blocking)
   _initializeDataInBackground();
 
-  // Start the app immediately - don't wait for data
+  // ✅ Step 4: Start the app
   runApp(const MyApp());
 }
 
@@ -79,12 +96,12 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // Auth Provider (doesn't use Firebase directly)
+        // Auth Provider
         ChangeNotifierProvider(
           create: (context) => AuthProvider(AuthService(ApiService())),
         ),
 
-        // Dashboard Provider (uses Firebase - will now work)
+        // Dashboard Provider (uses Firebase - will now work with request.auth)
         ChangeNotifierProvider(
           create: (_) => DashboardProvider()..initializeRealTimeUpdates(),
         ),
@@ -103,7 +120,7 @@ class _MyAppState extends State<MyApp> {
         // Attendance Provider
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
 
-        // ✅ FIXED: Removed duplicate closing parenthesis
+        // Worksheet Providers
         ChangeNotifierProvider(create: (_) => WorksheetGeneratorProvider()),
         ChangeNotifierProvider(create: (_) => WorksheetSubmissionProvider()),
       ],

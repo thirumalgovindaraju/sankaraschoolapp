@@ -1,5 +1,5 @@
 // lib/presentation/providers/worksheet_generator_provider.dart
-// ✅ COMPLETE FIX - Changed difficulty from String to DifficultyLevel
+// ✅ COMPLETE FIX - Removed uploadTextbook method
 
 import 'package:flutter/material.dart';
 import '../../data/models/worksheet_generator_model.dart';
@@ -19,7 +19,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   int _mcqCount = 10;
   int _shortAnswerCount = 5;
   int _longAnswerCount = 2;
-  DifficultyLevel _difficulty = DifficultyLevel.medium; // ✅ Changed from String to DifficultyLevel
+  DifficultyLevel _difficulty = DifficultyLevel.medium;
   int _durationMinutes = 60;
   String _worksheetType = 'practice';
 
@@ -34,7 +34,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
   int get mcqCount => _mcqCount;
   int get shortAnswerCount => _shortAnswerCount;
   int get longAnswerCount => _longAnswerCount;
-  DifficultyLevel get difficulty => _difficulty; // ✅ Returns DifficultyLevel instead of String
+  DifficultyLevel get difficulty => _difficulty;
   int get durationMinutes => _durationMinutes;
   String get worksheetType => _worksheetType;
 
@@ -66,49 +66,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Upload new textbook
-  Future<bool> uploadTextbook({
-    required String title,
-    required String subject,
-    required String board,
-    required String grade,
-    required String uploadedBy,
-    String? publisher,
-    String? edition,
-  }) async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      final textbook = await PDFProcessorService.uploadTextbook(
-        title: title,
-        subject: subject,
-        board: board,
-        grade: grade,
-        uploadedBy: uploadedBy,
-        publisher: publisher,
-        edition: edition,
-      );
-
-      if (textbook != null) {
-        _textbooks.insert(0, textbook);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      }
-
-      _error = 'Failed to upload textbook';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _error = 'Upload error: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
+  // ✅ REMOVED uploadTextbook method - handled by dialog directly
 
   // Select textbook
   void selectTextbook(Textbook textbook) {
@@ -170,7 +128,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDifficulty(DifficultyLevel difficulty) { // ✅ Changed parameter type from dynamic to DifficultyLevel
+  void setDifficulty(DifficultyLevel difficulty) {
     _difficulty = difficulty;
     notifyListeners();
   }
@@ -189,7 +147,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Generate worksheet - calling the service directly
+  // Generate worksheet
   Future<WorksheetModel?> generateWorksheet({
     required String title,
     required String createdBy,
@@ -206,7 +164,6 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Call the service method with all required parameters
       final worksheet = await WorksheetGeneratorService.generateWorksheet(
         title: title,
         textbook: _selectedTextbook!,
@@ -214,7 +171,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
         mcqCount: _mcqCount,
         shortAnswerCount: _shortAnswerCount,
         longAnswerCount: _longAnswerCount,
-        difficulty: _difficulty.name, // ✅ Convert enum to string for service
+        difficulty: _difficulty.name,
         durationMinutes: _durationMinutes,
         createdBy: createdBy,
         createdByName: createdByName,
@@ -236,13 +193,12 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Load worksheets - using the service
+  // Load worksheets
   Future<void> loadWorksheets() async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Call the service method
       _worksheets = await WorksheetGeneratorService.fetchWorksheets();
 
       _isLoading = false;
@@ -254,7 +210,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Generate PDF - using the service
+  // Generate PDF
   Future<void> generatePDF(WorksheetModel worksheet) async {
     try {
       _isLoading = true;
@@ -271,7 +227,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     }
   }
 
-  // Assign worksheet - using the service
+  // Assign worksheet
   Future<bool> assignWorksheet({
     required String worksheetId,
     List<String>? studentIds,
@@ -332,7 +288,7 @@ class WorksheetGeneratorProvider extends ChangeNotifier {
     _mcqCount = 10;
     _shortAnswerCount = 5;
     _longAnswerCount = 2;
-    _difficulty = DifficultyLevel.medium; // ✅ Reset to enum instead of string
+    _difficulty = DifficultyLevel.medium;
     _durationMinutes = 60;
     _worksheetType = 'practice';
     _error = null;

@@ -1,4 +1,5 @@
 // lib/presentation/screens/auth/login_screen.dart
+// ✅ UPDATED: Auto-logout on screen load to prevent Firebase Auth conflicts
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,36 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   UserRole _selectedRole = UserRole.admin;
+  bool _isInitializing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ NEW: Auto-logout when login screen loads to prevent Firebase Auth conflicts
+    _initializeLoginScreen();
+  }
+
+  // ✅ NEW: Initialize the login screen by logging out any existing session
+  Future<void> _initializeLoginScreen() async {
+    try {
+      debugPrint('🔄 Initializing login screen...');
+      final authProvider = context.read<AuthProvider>();
+
+      if (authProvider.isAuthenticated) {
+        debugPrint('⚠️ User already logged in, logging out...');
+        await authProvider.logout();
+        debugPrint('✅ Logged out successfully');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error during login screen initialization: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -239,7 +270,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       debugPrint('❌ Login failed: ${authProvider.errorMessage}');
 
-      // ✅ NEW: Enhanced error handling for approval status
       final errorMessage = authProvider.errorMessage ?? 'Login failed';
 
       // Check if this is an approval-related error
@@ -249,7 +279,6 @@ class _LoginScreenState extends State<LoginScreen> {
           errorMessage.contains('❌');
 
       if (isApprovalPending) {
-        // Show approval pending dialog
         await showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -277,7 +306,6 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         );
       } else if (isRejected) {
-        // Show rejected dialog
         await showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -308,7 +336,6 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         );
       } else {
-        // Show standard error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -321,6 +348,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ NEW: Show loading while initializing
+    if (_isInitializing) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -479,7 +515,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  if (kDebugMode) // Only show in debug mode
+                  if (kDebugMode)
                     Center(
                       child: TextButton.icon(
                         onPressed: () {

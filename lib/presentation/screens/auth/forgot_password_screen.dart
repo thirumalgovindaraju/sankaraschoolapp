@@ -1,4 +1,5 @@
 // lib/presentation/screens/auth/forgot_password_screen.dart
+// ✅ FIXED VERSION - Corrected return type handling
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -32,7 +33,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
 
-      final success = await authProvider.forgotPassword(
+      // ✅ FIX: forgotPassword returns Map<String, dynamic>, not bool
+      final result = await authProvider.forgotPassword(
         _emailController.text.trim(),
       );
 
@@ -42,11 +44,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         _isLoading = false;
       });
 
-      if (success) {
+      // ✅ FIX: Check result['success'] instead of treating result as bool
+      if (result['success'] == true) {
         _showSuccessDialog();
       } else {
         _showErrorSnackBar(
-          authProvider.errorMessage ?? 'Failed to send reset email',
+          result['message'] ?? 'Failed to send reset email',
         );
       }
     } catch (e) {
@@ -69,14 +72,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: Row(
-          children: [
+          children: const [
             Icon(
               Icons.check_circle,
               color: Colors.green,
               size: 28,
             ),
-            const SizedBox(width: 8),
-            const Text('Email Sent'),
+            SizedBox(width: 8),
+            Text('Email Sent'),
           ],
         ),
         content: const Text(

@@ -1,15 +1,14 @@
 // lib/presentation/screens/worksheet/upload_textbook_dialog.dart
+// ✅ FIXED VERSION - Correct imports and no pdf_text dependency
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_core/firebase_core.dart';
-import '../../../data/models/worksheet_generator_model.dart';
-import '../../../data/services/worksheet_generator_service.dart';
+import '../../../data/models/worksheet_generator_model.dart'; // ✅ FIXED PATH
+import '../../../data/services/pdf_processor_service.dart';
 import '../../providers/worksheet_generator_provider.dart';
 import '../../providers/auth_provider.dart';
-import '/data/services/pdf_processor_service.dart';
-
 
 class UploadTextbookDialog extends StatefulWidget {
   const UploadTextbookDialog({super.key});
@@ -29,7 +28,7 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
   String _selectedGrade = 'Year 10';
 
   bool _isUploading = false;
-  PlatformFile? _selectedFile; // ✅ ADDED
+  PlatformFile? _selectedFile;
 
   // Subjects list
   final List<String> _subjects = [
@@ -93,7 +92,7 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
     super.dispose();
   }
 
-  // ✅ ADDED: File picker method
+  // File picker method
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -168,7 +167,7 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
                   ),
                   const SizedBox(height: 24),
 
-                  // ✅ ADDED: File selection card
+                  // File selection card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -351,12 +350,12 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
                         ),
                         const SizedBox(height: 8),
                         _buildInfoItem('1', 'Upload your PDF textbook (up to 100MB)'),
-                        _buildInfoItem('2', 'AI extracts text and identifies chapters'),
-                        _buildInfoItem('3', 'Topics and keywords are analyzed automatically'),
+                        _buildInfoItem('2', 'PDF will be stored in Firebase Storage'),
+                        _buildInfoItem('3', 'Chapters and topics are organized automatically'),
                         _buildInfoItem('4', 'Takes 1-2 minutes for processing'),
                         const SizedBox(height: 8),
                         Text(
-                          '💡 Tip: Works best with text-based PDFs. Scanned PDFs may require OCR.',
+                          '💡 Tip: Make sure you have a stable internet connection.',
                           style: TextStyle(
                             fontSize: 12,
                             fontStyle: FontStyle.italic,
@@ -479,12 +478,11 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
     setState(() => _isUploading = true);
 
     try {
-      // Upload using the service
       // Get current user for uploadedBy
       final authProvider = context.read<AuthProvider>();
       final currentUserId = authProvider.currentUser?.id ?? 'unknown';
 
-// Call PDFProcessorService directly - it will pick the file
+      // Call PDFProcessorService with the selected file
       final textbook = await PDFProcessorService.uploadTextbookWithFile(
         file: _selectedFile!,
         title: _titleController.text.trim(),
@@ -522,8 +520,8 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
           ),
         );
 
-        // Close dialog and return textbook
-        Navigator.pop(context, textbook);
+        // Close dialog and return success
+        Navigator.pop(context, true);
 
         // Show processing info
         _showProcessingInfoDialog();
@@ -575,38 +573,33 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        icon: const Icon(Icons.hourglass_empty, size: 48, color: Colors.blue),
-        title: const Text('Processing Textbook'),
+        icon: const Icon(Icons.check_circle, size: 48, color: Colors.green),
+        title: const Text('Upload Complete!'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Your textbook is being processed in the background. This includes:',
+              'Your textbook has been uploaded successfully.',
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            _buildProcessingStep(Icons.text_fields, 'Extracting text from PDF'),
-            _buildProcessingStep(Icons.auto_awesome, 'AI analyzing chapters'),
-            _buildProcessingStep(Icons.topic, 'Identifying topics & keywords'),
-            _buildProcessingStep(Icons.done_all, 'Creating topic taxonomy'),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.amber[50],
+                color: Colors.green[50],
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber[200]!),
+                border: Border.all(color: Colors.green[200]!),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.schedule, color: Colors.amber[900]),
+                  Icon(Icons.info_outline, color: Colors.green[900]),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'This usually takes 1-2 minutes. You\'ll be notified when ready.',
+                      'You can now select this textbook to generate worksheets.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.amber[900],
+                        color: Colors.green[900],
                       ),
                     ),
                   ),
@@ -616,35 +609,9 @@ class _UploadTextbookDialogState extends State<UploadTextbookDialog> {
           ],
         ),
         actions: [
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Got it'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              context.read<WorksheetGeneratorProvider>().loadTextbooks();
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh List'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProcessingStep(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.blue[700]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 14),
-            ),
           ),
         ],
       ),

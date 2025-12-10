@@ -1,4 +1,5 @@
 // lib/data/services/worksheet_generator_service.dart
+// ✅ UPDATED: Now uses Claude AI instead of Gemini
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -7,13 +8,13 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/worksheet_generator_model.dart';
-import 'gemini_ai_service.dart';
+import 'claude_worksheet_service.dart'; // ✅ CHANGED: Use Claude instead of Gemini
 import 'pdf_processor_service.dart';
 
 class WorksheetGeneratorService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Generate worksheet with AI-powered questions
+  /// Generate worksheet with AI-powered questions using Claude
   static Future<WorksheetModel?> generateWorksheet({
     required String title,
     required Textbook textbook,
@@ -37,7 +38,7 @@ class WorksheetGeneratorService {
       for (var topic in selectedTopics) {
         if (kDebugMode) print('📝 Generating questions for: ${topic.name}');
 
-        // Get relevant content for this topic (simplified - you might want to enhance this)
+        // Get relevant content for this topic
         String topicContent = '''
 Topic: ${topic.name}
 Description: ${topic.description}
@@ -49,14 +50,17 @@ Keywords: ${topic.keywords.join(', ')}
         int topicShort = (shortAnswerCount / selectedTopics.length).round();
         int topicLong = (longAnswerCount / selectedTopics.length).round();
 
-        // Generate questions using Gemini AI
-        final questions = await GeminiAIService.generateQuestions(
+        // ✅ CHANGED: Use Claude AI instead of Gemini
+        final questions = await ClaudeWorksheetService.generateQuestions(
           topic: topic,
           topicContent: topicContent,
           mcqCount: topicMcq,
           shortAnswerCount: topicShort,
           longAnswerCount: topicLong,
+          difficulty: difficulty,
         );
+
+        if (kDebugMode) print('✅ Generated ${questions.length} questions for ${topic.name}');
 
         // Renumber questions sequentially
         for (var question in questions) {
@@ -338,6 +342,7 @@ Keywords: ${topic.keywords.join(', ')}
     required String subject,
     required String board,
     required String grade,
+    required String uploadedBy,
     required PlatformFile file,
     String? publisher,
     String? edition,
@@ -345,13 +350,13 @@ Keywords: ${topic.keywords.join(', ')}
     try {
       if (kDebugMode) print('📤 Uploading textbook via PDFProcessorService...');
 
-      // Delegate to PDFProcessorService which handles the actual upload
-      final textbook = await PDFProcessorService.uploadTextbook(
+      final textbook = await PDFProcessorService.uploadTextbookWithFile(
+        file: file,
         title: title,
         subject: subject,
         board: board,
         grade: grade,
-        uploadedBy: 'current_user', // You may want to pass this as a parameter
+        uploadedBy: uploadedBy,
         publisher: publisher,
         edition: edition,
       );
@@ -361,5 +366,10 @@ Keywords: ${topic.keywords.join(', ')}
       if (kDebugMode) print('❌ Error in uploadTextbook: $e');
       return null;
     }
+  }
+
+  /// Test Claude API connection
+  static Future<bool> testClaudeConnection() async {
+    return await ClaudeWorksheetService.testConnection();
   }
 }

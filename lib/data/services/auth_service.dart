@@ -1,5 +1,5 @@
 // lib/data/services/auth_service.dart
-// ✅ FIXED VERSION - Corrects method signature issues
+// Complete AuthService with Firebase Auth integration
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,39 +16,140 @@ class AuthService {
 
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
-  static const bool _useTestData = true; // ✅ CHANGED: Enable test mode by default
+  static const bool _useTestData = true;
 
   AuthService(this._apiService);
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  /// Initialize Firebase Auth users for testing
+  /// Call this once when app starts in main.dart
+  static Future<void> initializeTestUsers() async {
+    try {
+      debugPrint('🔧 Initializing test Firebase Auth users...');
+
+      final testUsers = [
+        {'email': 'admin@school.com', 'password': 'password123'},
+        {'email': 'teacher@school.com', 'password': 'password123'},
+        {'email': 'student@school.com', 'password': 'password123'},
+        {'email': 'parent@school.com', 'password': 'password123'},
+        {'email': 'priya@school.com', 'password': 'password123'},
+        {'email': 'raj@school.com', 'password': 'password123'},
+        {'email': 'amit@school.com', 'password': 'password123'},
+      ];
+
+      for (var user in testUsers) {
+        try {
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: user['email']!,
+            password: user['password']!,
+          );
+          debugPrint('✅ Created Firebase Auth user: ${user['email']}');
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'email-already-in-use') {
+            debugPrint('ℹ️ User already exists: ${user['email']}');
+          } else {
+            debugPrint('⚠️ Error creating ${user['email']}: ${e.code}');
+          }
+        }
+      }
+
+      // Sign out after initialization
+      await FirebaseAuth.instance.signOut();
+      debugPrint('✅ Test users initialized');
+    } catch (e) {
+      debugPrint('❌ Error initializing test users: $e');
+    }
+  }
 
   // ============================================================================
   // AUTHENTICATION METHODS
   // ============================================================================
 
-  /// Login - FIXED VERSION
-  Future<AuthResponse> login({
+  /// Login with Firebase Auth (creates real Firebase sessions)
+  Future<AuthResponse> loginWithFirebaseAuth({
     required String email,
     required String password,
     UserRole? role,
   }) async {
     try {
-      debugPrint('=== AUTH SERVICE LOGIN ===');
+      debugPrint('=== FIREBASE AUTH LOGIN ===');
       debugPrint('Email: $email');
       debugPrint('Role: ${role?.name}');
-      debugPrint('Using test data: $_useTestData');
 
+      // Step 0: Sign out any existing session first (fixes Windows threading issues)
+      try {
+        await _firebaseAuth.signOut();
+        debugPrint('🔓 Signed out any existing Firebase session');
+        // Small delay to let Firebase Auth clean up
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (e) {
+        debugPrint('⚠️ Sign out error (can be ignored): $e');
+      }
+
+      // Step 1: Sign in with Firebase Auth
+      UserCredential? userCredential;
+      bool firebaseAuthFailed = false;
+
+      try {
+        // Try to sign in
+        userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        debugPrint('✅ Firebase Auth sign in successful');
+      } catch (e) {
+        debugPrint('⚠️ Firebase Auth error: ${e.toString()}');
+
+        if (e is FirebaseAuthException) {
+          // On Windows, unknown-error is common - fall back to legacy login
+          if (e.code == 'unknown-error') {
+            debugPrint('⚠️ Firebase Auth unknown-error on Windows, using fallback method');
+            firebaseAuthFailed = true;
+          } else if (e.code == 'user-not-found' ||
+              e.code == 'invalid-credential' ||
+              e.code == 'wrong-password') {
+            debugPrint('📝 Creating Firebase Auth user for: $email (Error: ${e.code})');
+            try {
+              userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+                email: email,
+                password: password,
+              );
+              debugPrint('✅ Firebase Auth user created successfully');
+            } catch (createError) {
+              debugPrint('⚠️ Failed to create user, using fallback: $createError');
+              firebaseAuthFailed = true;
+            }
+          } else {
+            firebaseAuthFailed = true;
+          }
+        } else {
+          firebaseAuthFailed = true;
+        }
+      }
+
+      // If Firebase Auth failed, use legacy login method
+      if (firebaseAuthFailed || userCredential == null) {
+        debugPrint('🔄 Falling back to legacy login method (without Firebase Auth)');
+        return await _legacyLogin(email: email, password: password, role: role);
+      }
+
+      debugPrint('✅ Firebase Auth successful');
+
+      // Step 2: Get user data from test data
       if (_useTestData) {
-        // Load test data
         await TestDataService.instance.loadTestData();
-
-        // ✅ FIX: Get UserModel from test data
         final user = await TestDataService.instance.loginWithTestData(email, password);
 
         if (user != null) {
           debugPrint('✅ Test user found: ${user.name}');
 
-          // ✅ FIX: Verify role matches if provided
+          // Verify role matches if provided
           if (role != null && user.role != role) {
             debugPrint('❌ Role mismatch! Expected: ${role.name}, Got: ${user.role.name}');
+            await _firebaseAuth.signOut();
             return AuthResponse(
               success: false,
               message: 'Invalid role selected for this account',
@@ -57,10 +158,107 @@ class AuthService {
 
           // Check approval status
           if (user.isPending) {
-            return AuthResponse.pendingApproval(
-              email: email,
-              role: user.role,
+            await _firebaseAuth.signOut();
+            return AuthResponse.pendingApproval(email: email, role: user.role);
+          }
+
+          if (user.isRejected) {
+            await _firebaseAuth.signOut();
+            return AuthResponse.rejected(email: email);
+          }
+
+          if (!user.isApproved) {
+            await _firebaseAuth.signOut();
+            return AuthResponse(
+              success: false,
+              message: 'Your account is not approved',
             );
+          }
+
+          // Save user data
+          await _saveUserData(user);
+          final token = await userCredential.user!.getIdToken();
+          await _saveToken(token ?? 'test_token_${user.id}');
+
+          debugPrint('✅ Login successful with Firebase Auth!');
+          return AuthResponse(
+            success: true,
+            message: 'Login successful',
+            user: user,
+            accessToken: token,
+          );
+        }
+      }
+
+      // Fallback if test data fails
+      await _firebaseAuth.signOut();
+      return AuthResponse(
+        success: false,
+        message: 'Invalid credentials',
+      );
+
+    } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Firebase Auth error: ${e.code}');
+
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = 'Invalid email or password';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled';
+          break;
+        case 'too-many-requests':
+          message = 'Too many attempts. Please try again later';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address format';
+          break;
+        default:
+          message = 'Authentication failed: ${e.message}';
+      }
+
+      return AuthResponse(success: false, message: message);
+    } catch (e) {
+      debugPrint('❌ Login error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Login failed: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Legacy login method (without Firebase Auth)
+  Future<AuthResponse> login({
+    required String email,
+    required String password,
+    UserRole? role,
+  }) async {
+    try {
+      debugPrint('=== AUTH SERVICE LOGIN (Legacy) ===');
+      debugPrint('Email: $email');
+      debugPrint('Role: ${role?.name}');
+      debugPrint('Using test data: $_useTestData');
+
+      if (_useTestData) {
+        await TestDataService.instance.loadTestData();
+        final user = await TestDataService.instance.loginWithTestData(email, password);
+
+        if (user != null) {
+          debugPrint('✅ Test user found: ${user.name}');
+
+          if (role != null && user.role != role) {
+            debugPrint('❌ Role mismatch! Expected: ${role.name}, Got: ${user.role.name}');
+            return AuthResponse(
+              success: false,
+              message: 'Invalid role selected for this account',
+            );
+          }
+
+          if (user.isPending) {
+            return AuthResponse.pendingApproval(email: email, role: user.role);
           }
 
           if (user.isRejected) {
@@ -70,11 +268,10 @@ class AuthService {
           if (!user.isApproved) {
             return AuthResponse(
               success: false,
-              message: 'Your account status does not allow login. Please contact administration.',
+              message: 'Your account is not approved',
             );
           }
 
-          // Save user data
           await _saveUserData(user);
           await _saveToken('test_token_${user.id}');
 
@@ -99,14 +296,11 @@ class AuthService {
       }
 
       // Production API call
-      debugPrint('🌐 Making API call to /auth/login');
       final response = await _apiService.post('/auth/login', {
         'email': email,
         'password': password,
         if (role != null) 'role': role.name,
       });
-
-      debugPrint('📡 API Response Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -114,12 +308,8 @@ class AuthService {
         if (data['success'] == true) {
           final user = UserModel.fromJson(data['data']['user']);
 
-          // Check approval status
           if (user.isPending) {
-            return AuthResponse.pendingApproval(
-              email: email,
-              role: user.role,
-            );
+            return AuthResponse.pendingApproval(email: email, role: user.role);
           }
 
           if (user.isRejected) {
@@ -157,7 +347,7 @@ class AuthService {
     }
   }
 
-  /// Register - FIXED VERSION
+  /// Register
   Future<AuthResponse> register({
     required String email,
     required String password,
@@ -181,6 +371,20 @@ class AuthService {
             success: false,
             message: 'Email already registered. Please login or use a different email.',
           );
+        }
+
+        // Create Firebase Auth user
+        try {
+          await _firebaseAuth.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          debugPrint('✅ Firebase Auth user created');
+          await _firebaseAuth.signOut(); // Sign out after creation
+        } on FirebaseAuthException catch (e) {
+          if (e.code != 'email-already-in-use') {
+            debugPrint('⚠️ Firebase Auth creation warning: ${e.code}');
+          }
         }
 
         final success = await TestDataService.instance.registerUser(
@@ -242,6 +446,10 @@ class AuthService {
     try {
       debugPrint('=== AUTH SERVICE LOGOUT ===');
 
+      // Sign out from Firebase Auth
+      await _firebaseAuth.signOut();
+      debugPrint('✅ Firebase Auth sign out');
+
       if (!_useTestData) {
         try {
           final token = await getToken();
@@ -254,11 +462,7 @@ class AuthService {
       }
 
       // Clear local data
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_tokenKey);
-      await prefs.remove(_userKey);
-      await _apiService.removeToken();
-
+      await clearAuthData();
       debugPrint('✅ Logout successful');
     } catch (e) {
       debugPrint('❌ Logout error: $e');
@@ -276,6 +480,13 @@ class AuthService {
   }) async {
     try {
       if (_useTestData) {
+        // Update Firebase Auth password
+        final user = _firebaseAuth.currentUser;
+        if (user != null) {
+          await user.updatePassword(newPassword);
+          debugPrint('✅ Firebase password updated');
+        }
+
         await Future.delayed(const Duration(milliseconds: 500));
         debugPrint('✅ Password changed (test mode)');
         return true;
@@ -484,8 +695,102 @@ class AuthService {
   }
 
   // ============================================================================
+  // FIREBASE AUTH HELPERS
+  // ============================================================================
+
+  /// Get current Firebase user
+  User? get currentFirebaseUser => _firebaseAuth.currentUser;
+
+  /// Check if Firebase Auth session is active
+  bool get hasFirebaseSession => _firebaseAuth.currentUser != null;
+
+  /// Get Firebase ID token
+  Future<String?> getFirebaseIdToken({bool forceRefresh = false}) async {
+    try {
+      final user = _firebaseAuth.currentUser;
+      if (user == null) return null;
+      return await user.getIdToken(forceRefresh);
+    } catch (e) {
+      debugPrint('❌ Error getting Firebase ID token: $e');
+      return null;
+    }
+  }
+
+  // ============================================================================
   // PRIVATE HELPER METHODS
   // ============================================================================
+
+  /// Legacy login method (fallback when Firebase Auth fails)
+  Future<AuthResponse> _legacyLogin({
+    required String email,
+    required String password,
+    UserRole? role,
+  }) async {
+    try {
+      debugPrint('=== LEGACY LOGIN (without Firebase Auth) ===');
+
+      if (_useTestData) {
+        await TestDataService.instance.loadTestData();
+        final user = await TestDataService.instance.loginWithTestData(email, password);
+
+        if (user != null) {
+          debugPrint('✅ Test user found: ${user.name}');
+
+          if (role != null && user.role != role) {
+            debugPrint('❌ Role mismatch! Expected: ${role.name}, Got: ${user.role.name}');
+            return AuthResponse(
+              success: false,
+              message: 'Invalid role selected for this account',
+            );
+          }
+
+          if (user.isPending) {
+            return AuthResponse.pendingApproval(email: email, role: user.role);
+          }
+
+          if (user.isRejected) {
+            return AuthResponse.rejected(email: email);
+          }
+
+          if (!user.isApproved) {
+            return AuthResponse(
+              success: false,
+              message: 'Your account is not approved',
+            );
+          }
+
+          await _saveUserData(user);
+          await _saveToken('test_token_${user.id}');
+
+          debugPrint('✅ Legacy login successful!');
+          return AuthResponse(
+            success: true,
+            message: 'Login successful',
+            user: user,
+            accessToken: 'test_token_${user.id}',
+          );
+        } else {
+          debugPrint('❌ Invalid credentials');
+          return AuthResponse(
+            success: false,
+            message: 'Invalid email or password',
+          );
+        }
+      }
+
+      // Production API call would go here
+      return AuthResponse(
+        success: false,
+        message: 'API login not implemented',
+      );
+    } catch (e) {
+      debugPrint('❌ Legacy login error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Login failed: ${e.toString()}',
+      );
+    }
+  }
 
   Future<void> _saveToken(String token) async {
     try {
